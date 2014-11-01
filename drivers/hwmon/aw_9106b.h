@@ -31,9 +31,11 @@ enum aw_outn{
 };
 
 struct aw9106b_plat_data {
+	int led_in_breathing;
 	struct i2c_client *i2c_client;
 	struct i2c_driver *i2c_driver;
 	struct work_struct work;
+	enum aw_outn outn;
 	struct hrtimer timer;
 };
 
