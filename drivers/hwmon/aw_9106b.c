@@ -36,24 +36,13 @@
 
 #include <linux/i2c.h>
 #include "aw_9106b.h"
-#include  <../../include/linux/printk.h>
 
-static bool AW9106B_SUSPEND_FLAG=false; 
 #define GPIO_PWDN 28
 #define DELAY_256MS_UNIT 1
 #define AW_DRIVER_NAME "aw9106bdrv"
-#define DRV_NAME "class/leds/red/outn"
 //#define AW_GPIO_CONFIG
 
-#define AW_LED_DELAY_MS 650
-#define TIME_MS_UNIT  1000000ULL
-#define CONST_MIN_GRADE  10
-#define CONST_MAX_GRADE  200
-#define START_OUTN 3
-#define END_OUTN 5
-#define FADE_PARAM_LEN 20
-#define GRADE_PARAM_LEN 20
-#if 0
+
 enum aw_fade_time {
 	FADE_0_MS = 0x00,
 	FADE_256_MS = 0x09,
@@ -83,36 +72,7 @@ enum aw_fulloff_time {
 	FULLOFF_8192_MS = 0x30,
 	FULLOFF_16384_MS = 0x38,
 };
-#endif
-enum aw_fade_time {
-	FADE_0_MS,
-	FADE_256_MS,
-	FADE_512_MS,
-	FADE_1024_MS,
-	FADE_2048_MS,
-	FADE_4096_MS,
-};
-enum aw_fullon_time {
-	FULLON_0_MS,
-	FULLON_256_MS,
-	FULLON_512_MS,
-	FULLON_1024_MS,
-	FULLON_2048_MS,
-	FULLON_4096_MS,
-	FULLON_8192_MS,
-	FULLON_16384_MS,
-};
 
-enum aw_fulloff_time {
-	FULLOFF_0_MS,
-	FULLOFF_256_MS,
-	FULLOFF_512_MS,
-	FULLOFF_1024_MS,
-	FULLOFF_2048_MS,
-	FULLOFF_4096_MS,
-	FULLOFF_8192_MS,
-	FULLOFF_16384_MS,
-};
 enum aw_max_current {
 	MAX_37_MA,
 	MAX_27_8__MA,
@@ -163,14 +123,14 @@ enum aw_out_val{
 enum aw_outn_mode{
 	AW_POWER_OFF,// 0
 	AW_CONST_ON,  // 1
-	AW_CONST_OFF, // 2
-	AW_FADE_AUTO, // 3 
-	AW_FADE_ON_STEP,  // 4
-	AW_FADE_OFF_STEP, // 5
-	AW_FADE_CYCLE, // 6
-	AW_RESERVED, //7
+	AW_LOW_BATT_ON, // 2 
+	AW_CHG_ON, // 3
+	AW_NORMAL_ON, // 4
+	AW_FADE_ON_STEP,  // 5
+	AW_FADE_OFF_STEP, // 6
+	AW_FADE_CYCLE, // 7
 };
-#if 0
+
 typedef struct {
 	enum aw_fade_time fade_t;
 	enum aw_fullon_time fullon_t;
@@ -187,35 +147,20 @@ typedef struct  {
 	breath_config breath_t[3];
 	smart_config  smart_t[2];
 } aw9106b_config_param;
-#endif
-typedef struct {
-	u16 in_mode;
-	u16 dim_grade;
-	u16 grade_updown;
-} fade_data;
 
-static int debug_mask = 0;
-module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
-#define AW_DBG(x...) do {if (debug_mask) pr_info("aw9106b  " x); } while (0)
-
-static int max_current = MAX_9_25__MA;
-module_param(max_current, int, 0644);
+#define AW_LED_DELAY_MS 650
+#define TIME_MS_UNIT  1000000ULL
+#define CONST_MIN_GRADE  30
+#define CONST_MAX_GRADE  220
 
 static int min_grade = CONST_MIN_GRADE;
+module_param(min_grade, int, 0644);
+
 static int max_grade = CONST_MAX_GRADE;
+module_param(max_grade, int, 0644);
+
 static int start_grade = CONST_MIN_GRADE;
-static char grade_parameter[GRADE_PARAM_LEN];
 
-static int fade_time= FADE_2048_MS;
-static int fullon_time= FULLON_0_MS;
-static int fulloff_time= FULLOFF_4096_MS;
-static char fade_parameter[FADE_PARAM_LEN];
-
-static int outn = 0;
-static u16 aw_running = 0;
-static int timer_running = 0;
-static int fade_outn = 0;
-fade_data fade[6];
 struct aw9106b_plat_data aw9106b_data;
 static struct aw9106b_regs_data aw9106b_regs = 
 {
@@ -232,25 +177,27 @@ static struct aw9106b_regs_data aw9106b_regs =
 	.aw_reset = 0x7f,
 	.ctl = 0x11,
 };
-#if 0
+
 aw9106b_config_param aw_config = {
 	.breath_t = {
-		{FADE_2048_MS,FULLON_0_MS,FULLOFF_4096_MS,MAX_9_25__MA},
-		{FADE_2048_MS,FULLON_0_MS,FULLOFF_4096_MS,MAX_9_25__MA},
-		{FADE_1024_MS,FULLON_0_MS,FULLOFF_2048_MS,MAX_9_25__MA}
+		{FADE_512_MS,FULLON_0_MS,FULLOFF_4096_MS,MAX_9_25__MA},
+		{FADE_2048_MS,FULLON_0_MS,FULLOFF_2048_MS,MAX_9_25__MA},
+		{FADE_1024_MS,FULLON_0_MS,FULLOFF_256_MS,MAX_9_25__MA}
 	},
 	.smart_t ={
-		{FADE_2048_MS,MAX_9_25__MA},
-		{FADE_2048_MS,MAX_9_25__MA}
+		{FADE_4096_MS,MAX_9_25__MA},
+		{FADE_4096_MS,MAX_9_25__MA}
 	},
 };
-#endif
+
 #ifdef CONFIG_OF
 static struct of_device_id aw_9106b_match_table[] = {
 	{ .compatible = "aw,9106b", },
 	{}
 };
 #endif
+
+void enable_outn_fade_cycle(enum aw_outn out,enum aw_fade_time fade_t);
 
 /******************************************************** 
  *					 I2C I/O function 				              *
@@ -338,10 +285,10 @@ static int aw9106b_modify_regs(int reg,char bitn,enum aw_reg_ctl set)
 static void aw9106b_power_set(enum aw_power_state power_set)
 {
 	gpio_set_value(GPIO_PWDN, power_set);
-	AW_DBG("aw9106b_power_set = %d,GPIO_PWDN = %d\n", power_set,GPIO_PWDN);
+	printk("aw9106b_power_set = %d,GPIO_PWDN = %d\n", power_set,GPIO_PWDN);
 }
 
-static int set_fade_time(int fade_t)
+static int set_fade_time(enum aw_fade_time fade_t)
 {
 	char buf;
 	int ret;
@@ -354,7 +301,7 @@ static int set_fade_time(int fade_t)
 	return ret;
 }
 
-static int set_full_onoff_time(int full_on, int full_off)
+static int set_full_onoff_time(enum aw_fullon_time full_on,enum aw_fulloff_time full_off)
 {
 	char buf;
 	int ret;
@@ -370,7 +317,7 @@ static int set_full_onoff_time(int full_on, int full_off)
  *                                Config AW Outn mode                                 *
  *********************************************************/
 
-static int set_out_led_gpio(int out,enum aw_gpio_led gpmd_mode)
+static int set_out_led_gpio(enum aw_outn out,enum aw_gpio_led gpmd_mode)
 {
 	enum aw_reg_ctl set;
 	int ret;
@@ -398,7 +345,7 @@ static int set_out_led_gpio(int out,enum aw_gpio_led gpmd_mode)
 	return ret;
 }
 
-static int set_out_breath(int out,enum aw_ctl enable)
+static int set_out_breath(enum aw_outn out,enum aw_ctl enable)
 {
 	enum aw_reg_ctl set;
 	int ret;
@@ -416,7 +363,7 @@ static int set_out_breath(int out,enum aw_ctl enable)
 	return ret;
 }
 
-static int set_out_smart_blink(int out,enum aw_smart_blink blink_cfg)
+static int set_out_smart_blink(enum aw_outn out,enum aw_smart_blink blink_cfg)
 {
 	enum aw_reg_ctl set;
 	int ret;
@@ -443,7 +390,7 @@ static int set_out_smart_blink(int out,enum aw_smart_blink blink_cfg)
 	return ret;
 }
 
-static int set_out_smart_fade(int out,enum aw_smart_fade fade_onoff)
+static int set_out_smart_fade(enum aw_outn out,enum aw_smart_fade fade_onoff)
 {
 	enum aw_reg_ctl set;
 	int ret;
@@ -470,7 +417,7 @@ static int set_out_smart_fade(int out,enum aw_smart_fade fade_onoff)
 	return ret;
 }
 
-static int set_out_delay_time(int out,int delay_unit)
+static int set_out_delay_time(enum aw_outn out,int delay_unit)
 {
 	char buf;
 	int ret;
@@ -486,7 +433,7 @@ static int set_out_delay_time(int out,int delay_unit)
 	return ret;
 }
 
-static int set_out_dim_grade(int out,char grade)
+static int set_out_dim_grade(enum aw_outn out,char grade)
 {
 	char buf;
 	int ret;
@@ -546,12 +493,12 @@ static int close_out_blink_led(enum aw_led_close_mode close_mode)
 	return ret;
 }
 
-int aw_full_fade_time_confg(int fade_t,	int full_on, int full_off)
+int aw_full_fade_time_confg(enum aw_fade_time fade_t,
+		enum aw_fullon_time full_on,
+		enum aw_fulloff_time full_off)
 {
 	int ret;
-	fade_t = (fade_t<<3) + fade_t;
-	full_off = full_off<<3;
-	AW_DBG("fade_t= %d, full_on=%d full_off=%d\n",fade_t,full_on,full_off);
+
 	ret = set_fade_time(fade_t);
 	if(ret < 0)
 		pr_err("%s: config fade time  fail!\n",__func__);
@@ -563,29 +510,11 @@ int aw_full_fade_time_confg(int fade_t,	int full_on, int full_off)
 	return ret;
 }
 
-static void aw9106b_control_init(void)
-{
-	outn = 0;
-	aw_running = 0;
-}
-
-static void aw9106b_fade_data_init(void)
-{
-	int i;
-
-	for(i=0; i<6;i++){
-		fade[i].in_mode = 0;
-		fade[i].dim_grade = 0;
-		fade[i].grade_updown = 1;
-	}
-	timer_running = 0;
-	fade_outn = 0;
-}
-
 static int aw9106b_solft_reset(void)
 {
 	char buf;
 	int ret;
+
 	buf = 0x00;
 
 	ret = aw9106b_i2c_tx_byte_data(aw9106b_data.i2c_client,aw9106b_regs.aw_reset,buf);
@@ -627,307 +556,220 @@ int enable_out0_gpio(enum aw_out_val out_val)
 
 #endif 
 
-void enable_outn_fade_onoff(int val, int max_ma, enum aw_smart_fade fade_onoff)
+void enable_outn_fade_onoff(enum aw_outn out,smart_config smart_parm,
+		enum aw_smart_fade fade_onoff)
 {
 	int rc = 0;
-	int n = 0;
 
-	for(n = START_OUTN; n <= END_OUTN; n++){
-		if((outn & (1<<n))&&(fade[n].in_mode != val)){
-			//store the corrent mode
-			fade[n].in_mode = val;
+	aw9106b_power_set(AW_POWER_ON);
 
-			if(fade_onoff == AW_FADE_ON){
-				rc = set_out_breath(n,AW_CTL_DISABLE);
-				if(rc < 0)
-					pr_err("%s: diable out[%d] breath mode fail!\n",__func__,n);
-			}
-
-			//set fade,fullon,fulloff time
-			rc = aw_full_fade_time_confg(fade_time,FULLON_0_MS,FULLOFF_0_MS);
-			if(rc < 0)
-				pr_err("%s: config fade full on/off time fail!\n",__func__);
-
-			//set outn led mode
-			rc = set_out_led_gpio(n,AW_LED_MODE);
-			if(rc < 0)
-				pr_err("%s: set out[%d] LED mode fail!\n",__func__,n);
-
-			//enable outn breath func
-			rc = set_out_breath(n,AW_CTL_ENABLE);
-			if(rc < 0)
-				pr_err("%s: set out[%d] breath mode fail!\n",__func__,n);
-
-			//set outn blink
-			rc = set_out_smart_blink(n,AW_SMART_MODE);
-			if(rc < 0)
-				pr_err("%s: set out smart-fade mode fail!\n",__func__);
-
-			//set Imax
-			rc = set_const_current(max_ma);
-			if(rc < 0)
-				pr_err("%s: set imax fail!\n",__func__);
-
-			//set outn delay time
-			rc = set_out_delay_time(n,0*DELAY_256MS_UNIT);
-			if(rc < 0)
-				pr_err("%s: set out delay time fail!\n",__func__);
-
-			//set outn smart fade
-			rc = set_out_smart_fade(n,fade_onoff);
-			if(rc < 0)
-				pr_err("%s: start samrt-fade mode fail!\n",__func__);
-		}
-		outn &= ~(1<<n);
-		AW_DBG("fade_onoff outn= 0x%x\n",outn);
+	if(fade_onoff == AW_FADE_ON){
+		rc = set_out_breath(out,AW_CTL_DISABLE);
+		if(rc < 0)
+			pr_err("%s: diable out[%d] breath mode fail!\n",__func__,out);
 	}
-}
 
-
-void enable_outn_const_led(int val,int max_ma, char grade)
-
-{
-
-	int rc = 0;
-	int n = 0;
-
-	for(n = START_OUTN; n <= END_OUTN; n++){
-		if((outn & (1<<n)&&(fade[n].in_mode != val))){
-			//store the corrent mode
-			fade[n].in_mode = val;
-
-			//disable breathing mode
-			rc = set_out_breath(n,AW_CTL_DISABLE);
-			if(rc < 0)
-				pr_err("%s: set out[%d] breath mode fail!\n",__func__,n);
-
-			//set outn led mode
-			rc = set_out_led_gpio(n,AW_LED_MODE);
-			if(rc < 0)
-				pr_err("%s: set out[%d] LED mode fail!\n",__func__,n);
-
-			//set Imax
-			rc = set_const_current(max_ma);
-			if(rc < 0)
-				pr_err("%s: set imax fail!\n",__func__);
-
-			//set const current = (grade/256)*imax
-			rc = set_out_dim_grade(n,grade);
-			if(rc < 0)
-				pr_err("%s: set out[%d] dim grade fail!\n",__func__,n);
-		}
-
-		//clean the corresponding bit of outn
-		outn &= ~(1<<n);
-		AW_DBG("const_led outn= 0x%x\n",outn);
-	}
-}
-
-
-void enable_outn_blink_led(int val, int max_ma)
-
-{
-	int rc = 0;
-	int n = 0;
-
-	aw9106b_fade_data_init();
-	rc = aw9106b_solft_reset();
+	//set fade,fullon,fulloff time
+	rc = aw_full_fade_time_confg(smart_parm.fade_t,FULLOFF_0_MS,FULLOFF_0_MS);
 	if(rc < 0)
-		pr_err("%s: solft reset fail!\n",__func__);
+		pr_err("%s: config fade full on/off time fail!\n",__func__);
 
-	for(n = START_OUTN; n <= END_OUTN; n++){
-		if((outn & (1<<n))&&(fade[n].in_mode != val)){
-			//store the corrent mode
-			fade[n].in_mode = val;
-
-			//set fade,fullon,fulloff time
-			rc = aw_full_fade_time_confg(fade_time,fullon_time,fulloff_time);
-			if(rc < 0)
-				pr_err("%s: config fade full on/off time fail!\n",__func__);
-
-			//set outn led mode
-			rc = set_out_led_gpio(n,AW_LED_MODE);
-			if(rc < 0)
-				pr_err("%s: set out[%d] LED mode fail!\n",__func__,n);
-
-			//enable outn breath func
-			rc = set_out_breath(n,AW_CTL_ENABLE);
-			if(rc < 0)
-				pr_err("%s: set out[%d] breath mode fail!\n",__func__,n);
-
-			//set outn blink
-			rc = set_out_smart_blink(n,AW_BLINK_MODE);
-			if(rc < 0)
-				pr_err("%s: set out[%d] blink mode fail!\n",__func__,n);
-
-			//set outn delay time
-			rc = set_out_delay_time(n,0*DELAY_256MS_UNIT);
-			if(rc < 0)
-				pr_err("%s: set out[%d] delay time fail!\n",__func__,n);
-		}
-
-		//clean the corresponding bit of outn
-		outn &= ~(1<<n);
-		AW_DBG("blink_led outn= 0x%x\n",outn);
-	}
-
-	//start outn blink led
-	rc |= start_blink_led(max_ma);
+	//set outn led mode
+	rc = set_out_led_gpio(out,AW_LED_MODE);
 	if(rc < 0)
-		pr_err("%s: start blink fail!\n",__func__);
+		pr_err("%s: set out[%d] LED mode fail!\n",__func__,out);
+
+	//enable outn breath func
+	rc = set_out_breath(out,AW_CTL_ENABLE);
+	if(rc < 0)
+		pr_err("%s: set out[%d] breath mode fail!\n",__func__,out);
+
+	//set outn blink
+	rc = set_out_smart_blink(out,AW_SMART_MODE);
+	if(rc < 0)
+		pr_err("%s: set out smart-fade mode fail!\n",__func__);
+
+	//set Imax
+	rc = set_const_current(smart_parm.max_ma);
+	if(rc < 0)
+		pr_err("%s: set imax fail!\n",__func__);
+
+	//set outn delay time
+	rc = set_out_delay_time(out,0*DELAY_256MS_UNIT);
+	if(rc < 0)
+		pr_err("%s: set out delay time fail!\n",__func__);
+
+	//set outn smart fade
+	rc = set_out_smart_fade(out,fade_onoff);
+	if(rc < 0)
+		pr_err("%s: start samrt-fade mode fail!\n",__func__);
+
 }
 
 
+void enable_outn_blink_led(enum aw_outn out,breath_config breath_parm)
+{
+	int rc = 0;
+
+	//set fade,fullon,fulloff time
+	rc = aw_full_fade_time_confg(breath_parm.fade_t,breath_parm.fullon_t,breath_parm.fulloff_t);
+	if(rc < 0)
+		pr_err("%s: config fade full on/off time fail!\n",__func__);
+
+	//set outn led mode
+	rc = set_out_led_gpio(out,AW_LED_MODE);
+	if(rc < 0)
+		pr_err("%s: set out[%d] LED mode fail!\n",__func__,out);
+
+	//enable outn breath func
+	rc = set_out_breath(out,AW_CTL_ENABLE);
+	if(rc < 0)
+		pr_err("%s: set out[%d] breath mode fail!\n",__func__,out);
+
+	//set outn blink
+	rc = set_out_smart_blink(out,AW_BLINK_MODE);
+	if(rc < 0)
+		pr_err("%s: set out blink mode fail!\n",__func__);
+
+	//set outn delay time
+	rc = set_out_delay_time(out,0*DELAY_256MS_UNIT);
+	if(rc < 0)
+		pr_err("%s: set out delay time fail!\n",__func__);
+}
 
 static void aw9106b_work_func(struct work_struct *work)
-
 {
-
 	int rc;
-	int n;
+	static int dim_grade = 0;
+	static int grade_updown = 1;
 
-	for(n = START_OUTN; n <= END_OUTN; n++){
-		if(fade_outn & (1<<n)){
-			if(fade[n].in_mode != AW_FADE_CYCLE){
-				//first time to set fade mode for this channel,disable breathing mode
-				rc = set_out_breath(n,AW_CTL_DISABLE);
+	if(dim_grade == 0)
+		dim_grade = start_grade;		
 
-				//set outn led mode
-				rc |= set_out_led_gpio(n,AW_LED_MODE);
+	if(grade_updown == 1 && dim_grade<max_grade)
+		dim_grade++;
+	else if(grade_updown == 2 && dim_grade>min_grade)
+		dim_grade--;   
 
-				//set Imax
-				rc |= set_const_current(max_current);
-				if(rc < 0)
-					pr_err("%s: set imax fail!\n",__func__);
-
-				fade[n].in_mode = AW_FADE_CYCLE;
-				fade[n].dim_grade = min_grade;
-				fade[n].grade_updown = 1;
-				timer_running |= (1<<n);
-				AW_DBG("work_func:timer_running = 0x%x\n", timer_running);
-			}
-
-			if(fade[n].dim_grade == 0)
-				fade[n].dim_grade = start_grade;
-
-			if(fade[n].grade_updown == 1 && fade[n].dim_grade < max_grade)
-				fade[n].dim_grade++;
-			else if(fade[n].grade_updown == 2 && fade[n].dim_grade>min_grade)
-				fade[n].dim_grade--;
-
-			rc = set_out_dim_grade(n,fade[n].dim_grade);
-			if(rc < 0){
-				fade[n].in_mode = AW_CONST_ON;
-				fade[n].dim_grade = 0;
-				fade[n].grade_updown = 1;
-				timer_running &=~(1<<n);
-				fade_outn &=~(1<<n);
-				pr_err("%s: set out dim grade fail!\n",__func__);
-				return;
-			}
-
-			if(fade[n].grade_updown == 1 && fade[n].dim_grade>=max_grade)
-				fade[n].grade_updown = 2;
-
-			else if(fade[n].grade_updown == 2 && fade[n].dim_grade <= min_grade){
-				//fade cycle finish
-				fade[n].dim_grade = 0;
-				fade[n].in_mode = AW_CONST_ON;
-				fade[n].grade_updown = 1;
-				timer_running &=~(1<<n);
-				fade_outn &=~(1<<n);
-				AW_DBG("work_func:timer_running = 0x%x, fade_outn = 0x%x\n",timer_running, fade_outn);
-				AW_DBG("%s: end breath!\n",__func__);
-			}
-
-			if((timer_running & 0x3f) !=0)
-				hrtimer_start(&aw9106b_data.timer,ktime_set(0,1*TIME_MS_UNIT),HRTIMER_MODE_REL);
-		}
+	rc = set_out_dim_grade(aw9106b_data.outn,dim_grade);
+	if(rc < 0){
+		grade_updown = 1;
+		dim_grade = 0;
+		aw9106b_data.led_in_breathing = 0;
+		pr_err("%s: set out dim grade fail!\n",__func__);
+		return;
 	}
+
+	if(grade_updown == 1 && dim_grade>=max_grade)
+		grade_updown = 2;
+	else if(grade_updown == 2 && dim_grade <= min_grade){
+		grade_updown = 1;
+		dim_grade = 0;
+		pr_debug("%s: end breath!\n",__func__);
+		aw9106b_data.led_in_breathing = 0;
+		return;
+	}
+
+	hrtimer_start(&aw9106b_data.timer,ktime_set(0,1*TIME_MS_UNIT),HRTIMER_MODE_REL);	
 }
 
-
 static enum hrtimer_restart aw9106b_timer(struct hrtimer *timer)
-
 {
 	schedule_work(&aw9106b_data.work);
 	return HRTIMER_NORESTART;
 }
 
+
+void enable_outn_const_led(enum aw_outn out,enum aw_max_current imax)
+{
+	int rc = 0;
+
+	rc = set_out_led_gpio(out,AW_LED_MODE);
+	if(rc < 0)
+		pr_err("%s: set out[%d] LED mode fail!\n",__func__,out);
+
+	//set Imax
+	rc = set_const_current(imax);
+	if(rc < 0)
+		pr_err("%s: set imax fail!\n",__func__);
+}
+
 /*********************       aw9106b_breath_mode_set    *********************/
 
 void aw9106b_breath_mode_set(struct led_classdev *led_cdev,
-
 		enum led_brightness brightness)
-
 {
+	static int last_val;
 	int val = brightness;
 	int rc = 0;
-	if(AW9106B_SUSPEND_FLAG==true)return;
 
 	gpio_tlmm_config(GPIO_CFG(GPIO_PWDN, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA),GPIO_CFG_ENABLE);
-	AW_DBG("val=%d fade_outn= 0x%x, outn= 0x%x \n",val,fade_outn, outn);
 
-	if (aw_running == 0 && val != AW_POWER_OFF) { 
-		aw9106b_power_set(AW_POWER_ON);
-		rc = aw9106b_solft_reset();
-		if(rc < 0)
-			pr_err("%s: solft reset fail!\n",__func__);
-		aw_running = 1;
-	}
+	if((val == last_val) && 
+			(val==AW_CONST_ON || val==AW_LOW_BATT_ON || val==AW_CHG_ON || val==AW_NORMAL_ON ))
+		return;
+
+	aw9106b_power_set(AW_POWER_ON);
+	rc = aw9106b_solft_reset();
+	if(rc < 0)
+		pr_err("%s: solft reset fail!\n",__func__);
+
+	aw9106b_data.outn = AW_OUT_3;
+	printk("%s: out=%d val=%d\n",__func__,aw9106b_data.outn,val);
 
 	switch (val) {
 		case AW_POWER_OFF:
-			aw9106b_fade_data_init();
-			aw9106b_control_init();
 			aw9106b_power_set(AW_POWER_DOWN);
 			break;
-
+			
 		case AW_CONST_ON: 
-			enable_outn_const_led(val, max_current, min_grade);
+			enable_outn_const_led(AW_OUT_3 ,MAX_9_25__MA);
+			rc |= set_out_dim_grade(AW_OUT_3,min_grade);
+			if(rc < 0)
+				pr_err("%s: set out dim grade fail!\n",__func__);	
 			break;
-
-		case AW_CONST_OFF:
-			enable_outn_const_led(val, max_current, 0);
+			
+		//blink breath mode
+		case AW_LOW_BATT_ON:  
+		case AW_CHG_ON:  
+		case AW_NORMAL_ON: 
+			enable_outn_blink_led(aw9106b_data.outn ,aw_config.breath_t[val-AW_LOW_BATT_ON]);
+			//start outn blink led
+			rc |= start_blink_led(aw_config.breath_t[val-AW_LOW_BATT_ON].max_ma);
+			if(rc < 0)
+				pr_err("%s: start blink fail!\n",__func__);
 			break;
-
-			//blink breath mode
-		case AW_FADE_AUTO:
-			enable_outn_blink_led(val, max_current);
+			
+		//smart breath mode
+		case AW_FADE_ON_STEP:  
+			enable_outn_fade_onoff(aw9106b_data.outn ,aw_config.smart_t[0],AW_FADE_ON);
 			break;
-
-			//smart breath mode
-		case AW_FADE_ON_STEP:
-			enable_outn_fade_onoff(val, max_current,AW_FADE_ON);
+			
+		case AW_FADE_OFF_STEP:  
+			enable_outn_fade_onoff(aw9106b_data.outn ,aw_config.smart_t[1],AW_FADE_OFF);
 			break;
-
-		case AW_FADE_OFF_STEP:
-			enable_outn_fade_onoff(val,max_current,AW_FADE_OFF);
-			break;
-
-			//fade 1 cycle for press home key
-		case AW_FADE_CYCLE:
-			fade_outn |= outn;
-			if((timer_running & 0x3f) == 0){
-				AW_DBG("timer_running = 0x%x, start fade mode.\n",timer_running);
+			
+		//fade 1 cycle for press home key
+		case AW_FADE_CYCLE:  
+			if( aw9106b_data.led_in_breathing == 0 ){
+				aw9106b_data.led_in_breathing = 1;
+				start_grade = last_val? min_grade:0;
+				enable_outn_const_led(aw9106b_data.outn ,MAX_9_25__MA);
+				rc |= set_out_dim_grade(aw9106b_data.outn,start_grade);
+				if(rc < 0)
+					pr_err("%s: set out dim grade fail!\n",__func__);	
+				pr_debug("%s: start breath!\n",__func__);
 				hrtimer_start(&aw9106b_data.timer,ktime_set(0,0),HRTIMER_MODE_REL);
 			}
 			break;
-
-		case AW_RESERVED:
-			break;
-
+			
 		default:
 			break;
-
 	}
+	last_val = val;
 }
-
 EXPORT_SYMBOL_GPL(aw9106b_breath_mode_set);
-
-
 static void aw9106b_show_regs(void)
-
 {
 	char buf[1];
 
@@ -972,104 +814,11 @@ static void aw9106b_show_regs(void)
 	printk("read  ctl[0x%x] = 0x%x\n",aw9106b_regs.ctl,buf[0]);
 }
 
-//fade_parameter
-static ssize_t show_fade_parameter(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-
-	snprintf(fade_parameter, FADE_PARAM_LEN,	"%4d %4d %4d\n",
-			fade_time, fullon_time, fulloff_time);
-
-	return sprintf(buf, "%s\n", fade_parameter);
-}
-
-static ssize_t set_fade_parameter(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-
-	strncpy(fade_parameter, buf, FADE_PARAM_LEN);
-	sscanf(fade_parameter, "%d %d %d", &fade_time, &fullon_time, &fulloff_time);
-	AW_DBG("fade_time= %d, fullon_time=%d fulloff_time=%d\n",fade_time,fullon_time,fulloff_time);
-
-	return count;
-}
-
-//path: sys/class/leds/red/
-const static DEVICE_ATTR(fade_parameter, S_IRUGO | S_IWUSR,
-		show_fade_parameter, set_fade_parameter);
-
-//grade_parameter
-static ssize_t show_grade_parameter(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-
-	snprintf(grade_parameter, GRADE_PARAM_LEN,	"%4d %4d\n",
-			min_grade, max_grade);
-
-	return sprintf(buf, "%s\n", grade_parameter);
-}
-
-static ssize_t set_grade_parameter(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-
-	strncpy(grade_parameter, buf, GRADE_PARAM_LEN);
-	sscanf(grade_parameter, "%d %d", &min_grade, &max_grade);
-	AW_DBG("min_grade= %d, max_grade=%d \n",min_grade,max_grade);
-
-	return count;
-}
-//path: sys/class/leds/red/
-const static DEVICE_ATTR(grade_parameter, S_IRUGO | S_IWUSR,
-		show_grade_parameter, set_grade_parameter);
-
-
-//out_n
-static ssize_t show_outn(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-
-	return sprintf(buf, "%d\n", outn);
-}
-
-static ssize_t set_outn(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-
-	sscanf(buf, "%d", &outn);
-	AW_DBG("outn= %d \n",outn);
-
-#ifdef CONFIG_ZTEMT_BREATH_LED_NX503A
-    if(outn==16)outn=8;
-#endif
-	return count;
-}
-//path: sys/class/leds/red/
-const static DEVICE_ATTR(outn, S_IRUGO | S_IWUSR,
-		show_outn, set_outn);
-
-#if 0
-static int store_outn(const char *val, struct kernel_param *kp)
-
-{
-	int ret = 0;
-	ret = param_set_int(val, kp);
-	if (ret) {
-		pr_err("error setting value %d\n", ret);
-		return ret;
-	}
-	return ret;
-}
-module_param_call(outn, store_outn, param_get_uint,
-		&outn, 0644);
-#endif
 static int led_config;
 static int set_led_mode(const char *val, struct kernel_param *kp)
-
 {
 	int ret;
-	int rc = 0;
-
+  int rc = 0;
 	ret = param_set_int(val, kp);
 	if (ret) {
 		pr_err("error setting value %d\n", ret);
@@ -1077,97 +826,70 @@ static int set_led_mode(const char *val, struct kernel_param *kp)
 	}
 
 	printk("__%s: led_config=%d!\n",__func__,led_config);
-
 	switch(led_config){
 		case 0:
 			aw9106b_power_set(AW_POWER_DOWN);
 			break;
-
 		case 1:
-			outn = AW_OUT_0;
+			aw9106b_data.outn = AW_OUT_0;
 			break;
-
 		case 2:
-			outn = AW_OUT_1;
+			aw9106b_data.outn = AW_OUT_1;
 			break;
-
 		case 3:
 			aw9106b_show_regs();
 			break;
-
 		case 4:
-			enable_outn_const_led(AW_CONST_ON, MAX_18_5__MA,min_grade);
+			enable_outn_const_led(aw9106b_data.outn ,MAX_18_5__MA);
+			rc |= set_out_dim_grade(aw9106b_data.outn,min_grade);
+			if(rc < 0)
+				pr_err("%s: set out dim grade fail!\n",__func__);	
 			break;
-
 		case 5:
-			enable_outn_blink_led(AW_FADE_AUTO,max_current);
-			rc |= start_blink_led(max_current);
+			enable_outn_blink_led(aw9106b_data.outn ,aw_config.breath_t[2]);
+			rc |= start_blink_led(aw_config.breath_t[2].max_ma);
 			if(rc < 0)
 				pr_err("%s: start blink fail!\n",__func__);
 			break;
-
 		case 6:
 			close_out_blink_led(AW_CLOSE_NOW);
 			break;
-
 		case 7:
 			close_out_blink_led(AW_CLOSE_DELAY);
 			break;
-
 		default:
 			break;
 	};
+
 	return 0;
 }
-
 module_param_call(led_config, set_led_mode, param_get_uint,
 		&led_config, 0644);
-
 
 static struct led_classdev breath_led = {
 	.name		= "red",
 	.brightness_set	= aw9106b_breath_mode_set,
 };
 
-
 static int  aw9106b_probe(struct i2c_client *client,
-
 		const struct i2c_device_id *dev_id)
-
 {
 	int ret = 0;
 
 	printk("%s: start probe:\n",__func__);
-
 	aw9106b_data.i2c_client = client;
+	aw9106b_data.led_in_breathing = 0;
+
 	ret = led_classdev_register(NULL, &breath_led);
 	if (ret) {
 		pr_err("unable to register breath_led ret=%d\n",ret);
 		goto init_fail;
 	}
 
-	ret = device_create_file(breath_led.dev, &dev_attr_fade_parameter);
-	if (unlikely(ret < 0)) {
-		dev_err(breath_led.dev, "failed: cannot create fade_parameter.\n");
-	}
-
-	ret = device_create_file(breath_led.dev, &dev_attr_grade_parameter);
-	if (unlikely(ret < 0)) {
-		dev_err(breath_led.dev, "failed: cannot create grade_parameter.\n");
-	}
-
-	ret = device_create_file(breath_led.dev, &dev_attr_outn);
-	if (unlikely(ret < 0)) {
-		dev_err(breath_led.dev, "failed: cannot create outn.\n");
-	}
-
 	INIT_WORK(&aw9106b_data.work, aw9106b_work_func);
 
 	hrtimer_init(&aw9106b_data.timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	aw9106b_data.timer.function = aw9106b_timer;
-
-	aw9106b_fade_data_init();
-	aw9106b_control_init();
 
 	ret = gpio_request(GPIO_PWDN, "aw9106b_shdn");
 	if (ret) {
@@ -1192,13 +914,13 @@ static int aw9106b_remove(struct i2c_client *client)
 
 static int aw9106b_suspend(struct i2c_client *cl, pm_message_t mesg)
 {
-    AW9106B_SUSPEND_FLAG=true;
+
 	return 0;
 };
 
 static int aw9106b_resume(struct i2c_client *cl)
-{   
-    AW9106B_SUSPEND_FLAG=false;
+{
+
 	return 0;
 };
 
@@ -1219,6 +941,7 @@ static struct i2c_driver aw9106b_driver = {
 	.id_table 	= aw9106b_id,
 	.probe 		= aw9106b_probe,
 	.remove 	= aw9106b_remove,
+
 	.suspend	= aw9106b_suspend,
 	.resume 	= aw9106b_resume,
 };
@@ -1227,12 +950,14 @@ static struct i2c_driver aw9106b_driver = {
 static int __init aw9106b_init(void)
 {
 	printk( "%s:enter...\n", __func__);
+
 	return i2c_add_driver(&aw9106b_driver);
 }
 
 static void __exit aw9106b_exit(void)
 {
 	printk( "%s:%d:aw9106b is exiting\n", __func__,__LINE__);
+
 	i2c_del_driver(&aw9106b_driver);
 }
 
