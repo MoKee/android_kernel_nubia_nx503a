@@ -240,12 +240,10 @@ EXPORT_SYMBOL_GPL(async_synchronize_full);
 
 /**
  * async_synchronize_full_domain - synchronize all asynchronous function within a certain domain
-<<<<<<< HEAD
  * @list: running list to synchronize on
  *
  * This function waits until all asynchronous function calls for the
  * synchronization domain specified by the running list @list have been done.
- */
  * @domain: running list to synchronize on
  *
  * This function waits until all asynchronous function calls for the
@@ -263,10 +261,8 @@ EXPORT_SYMBOL_GPL(async_synchronize_full_domain);
  * @running: running list to synchronize on
  *
  * This function waits until all asynchronous function calls for the
-<<<<<<< HEAD
  * synchronization domain specified by the running list @list submitted
  * prior to @cookie have been done.
- */
  * synchronization domain specified by running list @running submitted
  * prior to @cookie have been done.
  */
