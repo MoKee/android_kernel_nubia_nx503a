@@ -91,9 +91,8 @@ static inline void rcu_preempt_note_context_switch(void)
 {
 }
 
-static inline int rcu_needs_cpu(int cpu, unsigned long *delta_jiffies)
+static inline int rcu_needs_cpu(int cpu)
 {
-	*delta_jiffies = ULONG_MAX;
 	return 0;
 }
 
@@ -102,9 +101,8 @@ static inline int rcu_needs_cpu(int cpu, unsigned long *delta_jiffies)
 void rcu_preempt_note_context_switch(void);
 int rcu_preempt_needs_cpu(void);
 
-static inline int rcu_needs_cpu(int cpu, unsigned long *delta_jiffies)
+static inline int rcu_needs_cpu(int cpu)
 {
-	*delta_jiffies = ULONG_MAX;
 	return rcu_preempt_needs_cpu();
 }
 
