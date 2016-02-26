@@ -55,7 +55,7 @@
 #include <linux/earlysuspend.h>
 #endif
 
-#define ZTEMT_TP_WAKEUP_GESTURE_FUNCTION	0		//add by luochangyang
+#define ZTEMT_TP_WAKEUP_GESTURE_FUNCTION	1		//add by luochangyang
 
 #define CY_CORE_REQUEST_EXCLUSIVE_TIMEOUT	500
 #define CY_CORE_SLEEP_REQUEST_EXCLUSIVE_TIMEOUT	5000
