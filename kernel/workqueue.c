@@ -992,15 +992,14 @@ static void __queue_work(unsigned int cpu, struct workqueue_struct *wq,
 			cpu = raw_smp_processor_id();
 
 		/*
-		 * It's multi cpu.  If @work was previously on a different
-		 * cpu, it might still be running there, in which case the
-		 * work needs to be queued on that cpu to guarantee
-		 * non-reentrancy.
+		 * It's multi cpu.  If @wq is non-reentrant and @work
+		 * was previously on a different cpu, it might still
+		 * be running there, in which case the work needs to
+		 * be queued on that cpu to guarantee non-reentrance.
 		 */
 		gcwq = get_gcwq(cpu);
-		last_gcwq = get_work_gcwq(work);
-
-		if (last_gcwq && last_gcwq != gcwq) {
+		if (wq->flags & WQ_NON_REENTRANT &&
+		    (last_gcwq = get_work_gcwq(work)) && last_gcwq != gcwq) {
 			struct worker *worker;
 
 			spin_lock_irqsave(&last_gcwq->lock, flags);
@@ -3717,11 +3716,8 @@ void freeze_workqueues_begin(void)
 		gcwq->flags |= GCWQ_FREEZING;
 
 		list_for_each_entry(wq, &workqueues, list) {
-			struct cpu_workqueue_struct *cwq;
-			if (cpu < CONFIG_NR_CPUS)
-                                cwq = get_cwq(cpu, wq);
-                        else
-                                continue;
+			struct cpu_workqueue_struct *cwq = get_cwq(cpu, wq);
+
 			if (cwq && wq->flags & WQ_FREEZABLE)
 				cwq->max_active = 0;
 		}
@@ -3761,11 +3757,8 @@ bool freeze_workqueues_busy(void)
 		 * to peek without lock.
 		 */
 		list_for_each_entry(wq, &workqueues, list) {
-			struct cpu_workqueue_struct *cwq;
-			if (cpu < CONFIG_NR_CPUS)
-                                cwq = get_cwq(cpu, wq);
-                        else
-                                continue;
+			struct cpu_workqueue_struct *cwq = get_cwq(cpu, wq);
+
 			if (!cwq || !(wq->flags & WQ_FREEZABLE))
 				continue;
 
