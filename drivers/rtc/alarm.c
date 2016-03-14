@@ -25,7 +25,7 @@
 
 #include <asm/mach/time.h>
 
-#define ALARM_DELTA 120
+#define ALARM_DELTA 60
 #define ANDROID_ALARM_PRINT_ERROR (1U << 0)
 #define ANDROID_ALARM_PRINT_INIT_STATUS (1U << 1)
 #define ANDROID_ALARM_PRINT_TSET (1U << 2)
@@ -88,7 +88,7 @@ void set_power_on_alarm(long secs, bool enable)
 		else
 			power_on_alarm = 0;
 	}
-
+			
 	set_alarm_time_to_rtc(power_on_alarm);
 	mutex_unlock(&power_on_alarm_mutex);
 }
@@ -542,6 +542,27 @@ static int set_alarm_time_to_rtc(const long power_on_time)
 	rtc_read_time(alarm_rtc_dev, &rtc_time);
 	getnstimeofday(&wall_time);
 	rtc_tm_to_time(&rtc_time, &rtc_secs);
+    if((power_on_time-rtc_secs)<(2*365*8*24*3600L)&&power_on_time>rtc_secs)
+    	{
+		alarm_time = power_on_time - ALARM_DELTA;
+		if (alarm_time <= rtc_secs)
+				goto disable_alarm;
+		
+		rtc_time_to_tm(alarm_time, &alarm.time);
+		alarm.enabled = 1;
+		rc = rtc_set_alarm(alarm_rtc_dev, &alarm);
+		
+		if (rc){
+			pr_alarm(ERROR, "Unable to set power-on alarm\n");
+			goto disable_alarm;
+		}
+		else
+			pr_alarm(FLOW, "Power-on alarm set to %lu\n",
+					alarm_time);
+		
+		return 0;
+	}else
+		{
 	alarm_delta = wall_time.tv_sec - rtc_secs;
 	alarm_time = power_on_time - alarm_delta;
 
@@ -550,6 +571,7 @@ static int set_alarm_time_to_rtc(const long power_on_time)
 	 * to powerup the device before actual alarm
 	 * expiration.
 	 */
+	
 	if ((alarm_time - ALARM_DELTA) > rtc_secs)
 		alarm_time -= ALARM_DELTA;
 
@@ -559,6 +581,8 @@ static int set_alarm_time_to_rtc(const long power_on_time)
 	rtc_time_to_tm(alarm_time, &alarm.time);
 	alarm.enabled = 1;
 	rc = rtc_set_alarm(alarm_rtc_dev, &alarm);
+	
+
 	if (rc){
 		pr_alarm(ERROR, "Unable to set power-on alarm\n");
 		goto disable_alarm;
@@ -568,7 +592,7 @@ static int set_alarm_time_to_rtc(const long power_on_time)
 				alarm_time);
 
 	return 0;
-
+		}
 disable_alarm:
 	rtc_alarm_irq_enable(alarm_rtc_dev, 0);
 	return rc;

@@ -305,8 +305,14 @@ struct mdss_panel_info {
 	u32 wait_cycle;
 	u32 pdest;
 	u32 brightness_max;
+    u32 bl_level;
 	u32 bl_max;
 	u32 bl_min;
+    int brig_to_bl_lvl_para_a1;
+    int brig_to_bl_lvl_para_a2;
+    int brig_to_bl_lvl_para_b1;
+    int brig_to_bl_lvl_para_b2;
+    int brig_to_bl_lvl_turn_point;
 	u32 fb_num;
 	u32 clk_rate;
 	u32 clk_min;

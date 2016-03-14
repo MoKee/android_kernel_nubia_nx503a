@@ -24,6 +24,9 @@
 #include <linux/switch.h>
 #include <linux/workqueue.h>
 #include <linux/gpio.h>
+#ifdef CONFIG_OF
+#include <linux/of_gpio.h>
+#endif
 
 struct gpio_switch_data {
 	struct switch_dev sdev;
@@ -70,14 +73,44 @@ static ssize_t switch_gpio_print_state(struct switch_dev *sdev, char *buf)
 	return -1;
 }
 
+#ifdef CONFIG_OF
+static int gpio_switch_get_devtree_pdata(struct device *dev,
+			    struct gpio_switch_platform_data *pdata)
+{
+	struct device_node *node;
+	enum of_gpio_flags flags;
+
+	node = dev->of_node;
+	if (node == NULL)
+		return -ENODEV;
+
+	memset(pdata, 0, sizeof *pdata);
+
+	pdata->name = of_get_property(node, "input-name", NULL);
+	pdata->gpio = of_get_gpio_flags(node, 0, &flags);
+	return 0;
+}
+#endif
+
 static int gpio_switch_probe(struct platform_device *pdev)
 {
 	struct gpio_switch_platform_data *pdata = pdev->dev.platform_data;
 	struct gpio_switch_data *switch_data;
 	int ret = 0;
-
+#ifdef CONFIG_OF
+	struct device *dev = &pdev->dev;
+	struct gpio_switch_platform_data alt_pdata;
+	int error;
+	if (!pdata) {
+		error = gpio_switch_get_devtree_pdata(dev, &alt_pdata);
+		if (error)
+			return error;
+		pdata = &alt_pdata;
+	}
+#else
 	if (!pdata)
 		return -EBUSY;
+#endif
 
 	switch_data = kzalloc(sizeof(struct gpio_switch_data), GFP_KERNEL);
 	if (!switch_data)
@@ -111,8 +144,13 @@ static int gpio_switch_probe(struct platform_device *pdev)
 		goto err_detect_irq_num_failed;
 	}
 
+#ifdef CONFIG_SWITCH_GPIO
+	ret = request_irq(switch_data->irq, gpio_irq_handler,
+			  IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, pdev->name, switch_data);
+#else
 	ret = request_irq(switch_data->irq, gpio_irq_handler,
 			  IRQF_TRIGGER_LOW, pdev->name, switch_data);
+#endif
 	if (ret < 0)
 		goto err_request_irq;
 
@@ -133,6 +171,13 @@ err_switch_dev_register:
 	return ret;
 }
 
+#ifdef CONFIG_OF
+static const struct of_device_id gpio_switch_dt_match[] = {
+	{.compatible = "nubia,switch-gpio"},
+	{}
+};
+#endif
+
 static int __devexit gpio_switch_remove(struct platform_device *pdev)
 {
 	struct gpio_switch_data *switch_data = platform_get_drvdata(pdev);
@@ -151,6 +196,9 @@ static struct platform_driver gpio_switch_driver = {
 	.driver		= {
 		.name	= "switch-gpio",
 		.owner	= THIS_MODULE,
+		#ifdef CONFIG_OF
+		.of_match_table = gpio_switch_dt_match,
+		#endif
 	},
 };
 

@@ -249,6 +249,10 @@ struct wcd9xxx_mbhc_config {
 	bool use_vddio_meas;
 	bool enable_anc_mic_detect;
 	enum hw_jack_type hw_jack_type;
+    //add by wuzehui for using the switch function
+#ifdef CONFIG_ZTEMT_AUDIO_HEADSET_SW
+    int sw_gpio;
+#endif
 };
 
 struct wcd9xxx_cfilt_mode {

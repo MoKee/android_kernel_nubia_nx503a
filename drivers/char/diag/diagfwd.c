@@ -1729,6 +1729,22 @@ int diag_process_apps_pkt(unsigned char *buf, int len)
 		/* Not required, represents that command isnt sent to modem */
 		return 0;
 	}
+#ifdef CONFIG_ZTEMT_RESTART
+	/*Check for restart command, to perform reset, will not get into download mode*/
+	else if ((cpu_is_msm8x60() || chk_apps_master()) &&
+		((*buf == 0x29) && (*(buf+1) == 0x02) && (*(buf+2) == 0x00))) {
+		/*send response pack*/
+		driver->apps_rsp_buf[0] = *buf;
+		encode_rsp_and_send(0);
+		msleep(5000);
+		/*call restart API*/
+		msm_set_restart_mode(RESTART_NORMAL);
+		printk(KERN_CRIT "diag: restart mode set, Rebooting SOC..\n");
+		kernel_restart(NULL);
+		/*Not required, represents that command isnt send to modem*/
+		return 0;
+	}
+#endif
 	/* Check for polling for Apps only DIAG */
 	else if ((*buf == 0x4b) && (*(buf+1) == 0x32) &&
 		(*(buf+2) == 0x03)) {

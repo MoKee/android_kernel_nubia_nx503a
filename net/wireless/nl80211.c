@@ -1726,6 +1726,8 @@ static int nl80211_set_interface(struct sk_buff *skb, struct genl_info *info)
 
 	memset(&params, 0, sizeof(params));
 
+printk("sh %s \n", __func__);
+
 	otype = ntype = dev->ieee80211_ptr->iftype;
 
 	if (info->attrs[NL80211_ATTR_IFTYPE]) {

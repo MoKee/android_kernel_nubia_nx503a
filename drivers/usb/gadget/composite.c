@@ -1148,6 +1148,10 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 				cdev->desc.bcdUSB = cpu_to_le16(0x0210);
 				DBG(cdev, "Config HS device with LPM(L1)\n");
 			}
+#ifdef CONFIG_ZTEMT_USB
+			if(composite)
+				composite->dev->bcdUSB = cdev->desc.bcdUSB;
+#endif
 
 			value = min(w_length, (u16) sizeof cdev->desc);
 			memcpy(req->buf, &cdev->desc, value);

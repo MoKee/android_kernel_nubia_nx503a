@@ -78,7 +78,11 @@ obj-$(CONFIG_SND_SOC_MDM9615) += snd-soc-mdm9615.o
 
 # for MSM 8974 sound card driver
 obj-$(CONFIG_SND_SOC_MSM_QDSP6V2_INTF) += qdsp6v2/
+ifdef CONFIG_SND_SOC_AK4961
+snd-soc-msm8974-objs := msm8974-ak4961.o
+else
 snd-soc-msm8974-objs := msm8974.o
+endif
 obj-$(CONFIG_SND_SOC_MSM8974) += snd-soc-msm8974.o
 
 snd-soc-qdsp6v2-objs := msm-dai-fe.o

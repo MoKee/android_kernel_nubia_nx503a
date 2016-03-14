@@ -62,7 +62,7 @@ static int msm8974_auxpcm_rate = 8000;
 #define I2S_PCM_SEL 1
 #define I2S_PCM_SEL_OFFSET 1
 
-#define WCD9XXX_MBHC_DEF_BUTTONS 8
+#define WCD9XXX_MBHC_DEF_BUTTONS 3
 #define WCD9XXX_MBHC_DEF_RLOADS 5
 #define TAIKO_EXT_CLK_RATE 9600000
 
@@ -114,6 +114,31 @@ void *def_taiko_mbhc_cal(void);
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 					bool dapm);
 
+#ifdef CONFIG_ZTEMT_AUDIO_MBHC_OPEN
+static struct wcd9xxx_mbhc_config mbhc_cfg = {
+	.read_fw_bin = false,
+	.calibration = NULL,
+	.micbias = MBHC_MICBIAS2,
+	.anc_micbias = MBHC_MICBIAS2,
+	.mclk_cb_fn = msm_snd_enable_codec_ext_clk,
+	.mclk_rate = TAIKO_EXT_CLK_RATE,
+	.gpio = 0,
+	.gpio_irq = 0,
+	.gpio_level_insert = 0,
+	.detect_extn_cable = true,
+	.micbias_enable_flags = 1 << MBHC_MICBIAS_ENABLE_THRESHOLD_HEADSET,
+	.insert_detect = true,
+	.swap_gnd_mic = NULL,
+	.cs_enable_flags = (1 << MBHC_CS_ENABLE_POLLING |
+			    1 << MBHC_CS_ENABLE_INSERTION |
+			    1 << MBHC_CS_ENABLE_REMOVAL |
+			    1 << MBHC_CS_ENABLE_DET_ANC),
+	.do_recalibration = true,
+	.use_vddio_meas = true,
+	.enable_anc_mic_detect = false,
+	.hw_jack_type = SIX_POLE_JACK,
+};
+#else
 static struct wcd9xxx_mbhc_config mbhc_cfg = {
 	.read_fw_bin = false,
 	.calibration = NULL,
@@ -137,6 +162,7 @@ static struct wcd9xxx_mbhc_config mbhc_cfg = {
 	.enable_anc_mic_detect = false,
 	.hw_jack_type = SIX_POLE_JACK,
 };
+#endif
 
 struct msm_auxpcm_gpio {
 	unsigned gpio_no;
@@ -199,6 +225,15 @@ static struct regulator *ext_spk_amp_regulator;
 static int ext_spk_amp_gpio = -1;
 static int ext_ult_spk_amp_gpio = -1;
 static int ext_ult_lo_amp_gpio = -1;
+/*Add by wuzehui for ext_lineout amp gpio  */
+#ifdef CONFIG_ZTEMT_AUDIO_EXT_AMP
+static int ext_lineout1_amp_gpio = -1;
+static int ext_lineout3_amp_gpio = -1;
+#endif
+#ifdef CONFIG_ZTEMT_AUDIO_HEADSET_SW
+	int mbhc_switch_enable_gpio = -1;
+#endif
+//end
 static int msm8974_spk_control = 1;
 static int msm8974_ext_spk_pamp;
 static int msm_slim_0_rx_ch = 1;
@@ -469,12 +504,45 @@ static void msm8974_fluid_ext_us_amp_off(u32 spk)
 	}
 }
 
+#ifdef CONFIG_ZTEMT_AUDIO_EXT_AMP
+//Add by wuzehui for ext lineout gpio on or off
+static void ext_spk_lineout_amp_gpio_on(u32 spk)
+{
+	if (spk & LO_1_SPK_AMP && gpio_is_valid(ext_lineout1_amp_gpio)) {
+        pr_debug("%s:lineout1 ext gpio %d\n",__func__,ext_lineout1_amp_gpio);
+        gpio_direction_output(ext_lineout1_amp_gpio,1);
+    }
+
+	if (spk & LO_3_SPK_AMP && gpio_is_valid(ext_lineout3_amp_gpio)) {
+        pr_debug("%s:lineout3 ext gpio %d\n",__func__,ext_lineout3_amp_gpio);
+        gpio_direction_output(ext_lineout3_amp_gpio,1);
+    }
+}
+
+static void ext_spk_lineout_amp_gpio_off(u32 spk)
+{
+	if (spk & LO_1_SPK_AMP && gpio_is_valid(ext_lineout1_amp_gpio)) {
+        pr_debug("%s:lineout1 ext gpio %d\n",__func__,ext_lineout1_amp_gpio);
+        gpio_direction_output(ext_lineout1_amp_gpio,0);
+    }
+	if (spk & LO_3_SPK_AMP && gpio_is_valid(ext_lineout3_amp_gpio)) {
+        pr_debug("%s:lineout3 ext gpio %d\n",__func__,ext_lineout3_amp_gpio);
+        gpio_direction_output(ext_lineout3_amp_gpio,0);
+    }
+}
+//end
+#endif
 static void msm8974_ext_spk_power_amp_on(u32 spk)
 {
 	if (gpio_is_valid(ext_spk_amp_gpio))
 		msm8974_liquid_ext_spk_power_amp_on(spk);
 	else if (gpio_is_valid(ext_ult_lo_amp_gpio))
 		msm8974_fluid_ext_us_amp_on(spk);
+#ifdef CONFIG_ZTEMT_AUDIO_EXT_AMP
+    //Add by wuzehui for ext amp gpio on
+    ext_spk_lineout_amp_gpio_on(spk);
+    //end
+#endif
 }
 
 static void msm8974_liquid_ext_spk_power_amp_off(u32 spk)
@@ -509,6 +577,11 @@ static void msm8974_ext_spk_power_amp_off(u32 spk)
 		msm8974_liquid_ext_spk_power_amp_off(spk);
 	else if (gpio_is_valid(ext_ult_lo_amp_gpio))
 		msm8974_fluid_ext_us_amp_off(spk);
+#ifdef CONFIG_ZTEMT_AUDIO_EXT_AMP
+    //Add by wuzehui for ext amp gpio off
+    ext_spk_lineout_amp_gpio_off(spk) ;
+    //end
+#endif
 }
 
 static void msm8974_ext_control(struct snd_soc_codec *codec)
@@ -1698,7 +1771,7 @@ void *def_taiko_mbhc_cal(void)
 #undef S
 #define S(X, Y) ((WCD9XXX_MBHC_CAL_PLUG_TYPE_PTR(taiko_cal)->X) = (Y))
 	S(v_no_mic, 30);
-	S(v_hs_max, 2400);
+	S(v_hs_max, 3000);
 #undef S
 #define S(X, Y) ((WCD9XXX_MBHC_CAL_BTN_DET_PTR(taiko_cal)->X) = (Y))
 	S(c[0], 62);
@@ -1717,11 +1790,12 @@ void *def_taiko_mbhc_cal(void)
 	btn_high = wcd9xxx_mbhc_cal_btn_det_mp(btn_cfg,
 					       MBHC_BTN_DET_V_BTN_HIGH);
 	btn_low[0] = -50;
-	btn_high[0] = 20;
-	btn_low[1] = 21;
-	btn_high[1] = 61;
-	btn_low[2] = 62;
-	btn_high[2] = 104;
+	btn_high[0] = 140;
+	btn_low[1] = 141;
+	btn_high[1] = 261;
+	btn_low[2] = 262;
+	btn_high[2] = 404;
+#if 0
 	btn_low[3] = 105;
 	btn_high[3] = 148;
 	btn_low[4] = 149;
@@ -1732,6 +1806,7 @@ void *def_taiko_mbhc_cal(void)
 	btn_high[6] = 269;
 	btn_low[7] = 270;
 	btn_high[7] = 500;
+#endif
 	n_ready = wcd9xxx_mbhc_cal_btn_det_mp(btn_cfg, MBHC_BTN_DET_N_READY);
 	n_ready[0] = 80;
 	n_ready[1] = 68;
@@ -2871,6 +2946,8 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 	struct resource	*pri_muxsel;
 	struct resource	*sec_muxsel;
 
+
+
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev, "No platform supplied from device tree\n");
 		return -EINVAL;
@@ -2955,6 +3032,24 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 			dev_dbg(&pdev->dev, "Unknown value, hence setting to default");
 		}
 	}
+
+// Add by wuzehui
+#ifdef CONFIG_ZTEMT_AUDIO_HEADSET_SW
+    if(mbhc_switch_enable_gpio == -1 ) {
+        mbhc_switch_enable_gpio = of_get_named_gpio(pdev->dev.of_node,
+                "qcom,mbhc-switch-enable-gpio", 0);
+        if(mbhc_switch_enable_gpio >= 0){
+            mbhc_cfg.sw_gpio = mbhc_switch_enable_gpio;
+            gpio_request(mbhc_cfg.sw_gpio, "headset");
+            gpio_direction_output(mbhc_cfg.sw_gpio,0);
+            pr_debug("headset switch gpio %d and set the value %d\n",
+                    mbhc_cfg.sw_gpio,gpio_get_value_cansleep(mbhc_cfg.sw_gpio));
+        } else
+            mbhc_cfg.sw_gpio = 0;
+        pr_debug("qcom,mbhc-switch-enable-gpio is %d\n",mbhc_cfg.sw_gpio);
+    }
+#endif
+// end by wuzehui
 	if (of_property_read_bool(pdev->dev.of_node, "qcom,hdmi-audio-rx")) {
 		dev_info(&pdev->dev, "%s(): hdmi audio support present\n",
 				__func__);
@@ -3025,6 +3120,34 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 		}
 	}
 
+#ifdef CONFIG_ZTEMT_AUDIO_EXT_AMP
+    // Add by wuzehui
+    // GET the ext lineout gpio, and init the gpio value to zero.
+    ext_lineout1_amp_gpio = of_get_named_gpio(pdev->dev.of_node,
+            "qcom,ext-lineout1-amp-gpio", 0);
+    ext_lineout3_amp_gpio = of_get_named_gpio(pdev->dev.of_node,
+            "qcom,ext-lineout3-amp-gpio", 0);
+    pr_debug("ext_lineout1_amp_gpio is %d,\next_lineout3_amp_gpio is %d\n",
+            ext_lineout1_amp_gpio,ext_lineout3_amp_gpio);
+
+    if(gpio_is_valid(ext_lineout1_amp_gpio)) {
+        ret = gpio_request(ext_lineout1_amp_gpio,"Lineout_1 amp");
+        if(ret) {
+            pr_err("%s:request ext_lineout1_amp_gpio %d\n",__func__,ret);
+        } else {
+            gpio_direction_output(ext_lineout1_amp_gpio,0);
+        }
+    }
+    if(gpio_is_valid(ext_lineout3_amp_gpio)) {
+        ret = gpio_request(ext_lineout3_amp_gpio,"Lineout_1 amp");
+        if(ret) {
+            pr_err("%s:request ext_lineout3_amp_gpio %d\n",__func__,ret);
+        } else {
+            gpio_direction_output(ext_lineout3_amp_gpio,0);
+        }
+    }
+    // end by wuzehui
+#endif
 	pdata->us_euro_gpio = of_get_named_gpio(pdev->dev.of_node,
 				"qcom,us-euro-gpios", 0);
 	if (pdata->us_euro_gpio < 0) {

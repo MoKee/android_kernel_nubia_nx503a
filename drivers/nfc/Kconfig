@@ -40,6 +40,38 @@ config NFC_WILINK
 
 endmenu
 
+config PN547_NFC
+	tristate "PN547 NFC driver"
+	depends on I2C
+	select CRC_CCITT
+	default n
+	---help---
+	Say yes if you want PN54x Near Field Communication driver.
+	This is for i2c connected version. If unsure, say N here.
+
+config NFC_PN544
+	tristate "ZTEMT NFC PN544 driver"
+	depends on I2C
+	select CRC_CCITT
+	default n
+	---help---
+	  Say yes if you want ZTEMT PN544 Near Field Communication driver.
+	  This is for i2c connected version. If unsure, say N here.
+
+	  To compile this driver as a module, choose m here. The module will
+	  be called pn544.	  
+
+config BCM2079X_I2C
+	tristate "BCM2079X NFC driver"
+	depends on I2C
+	default n
+	---help---
+	  Say yes if you want BCM20791 Near Field Communication driver.
+	  This is for i2c connected version. If unsure, say N here.
+
+	  To compile this driver as a module, choose m here. The module will
+	  be called bcm2079x.
+
 config NFC_QNCI
 	bool "Qualcomm NCI based NFC Controller Driver for qca199x"
 	depends on I2C

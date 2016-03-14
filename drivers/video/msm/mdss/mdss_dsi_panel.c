@@ -23,10 +23,19 @@
 #include <linux/err.h>
 
 #include "mdss_dsi.h"
+#include "zte_disp_enhance.h"
+#include "zte_tps65132.h"
+#ifdef CONFIG_ZTEMT_LCD_BACKLIGHT
+#include "zte_backlight.h"
+#endif
 
 #define DT_CMD_HDR 6
 
 #define MIN_REFRESH_RATE 30
+
+#ifdef CONFIG_ZTEMT_HW_VERSION_NX505J
+extern int ztemt_get_hw_id(void);
+#endif
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
@@ -145,19 +154,55 @@ static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
-static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_WRITE1 */
+#if 0
+
+u32 mdss_dsi_panel_reg_read(struct mdss_dsi_ctrl_pdata *ctrl)
+{
+	u32 val = 0;
+	char rbuf[4];
+	char reg = 0x56;
+
+	mdss_dsi_panel_cmd_read(ctrl, reg, 0x00, NULL, rbuf, 1);
+	val = rbuf[0];
+
+	pr_info("%s: 0x%x,  val=0x%x, val=%d\n", __func__, reg, val, val);
+
+	return 0;
+}
+
+#endif
+
+static char led_pwm1[] = {0x51, 0x00, 0x00};	/* DTYPE_DCS_WRITE */
 static struct dsi_cmd_desc backlight_cmd = {
-	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1)},
-	led_pwm1
+	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm1)}, led_pwm1
 };
 
 static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 {
 	struct dcs_cmd_req cmdreq;
 
-	pr_debug("%s: level=%d\n", __func__, level);
+    led_pwm1[0] =  ctrl->bklt_ctrl_dcs_reg;
 
-	led_pwm1[1] = (unsigned char)level;
+    if (0 == level) 
+    {
+        led_pwm1[1] = 0x00;
+        led_pwm1[2] = 0x00;
+    }
+    else 
+    {
+        if (ctrl->panel_data.panel_info.bl_max <= 0xff) //bl_max <= 1Byte
+        {
+            led_pwm1[1] = level & 0xff;
+        }
+        else
+        {
+            if (ctrl->panel_data.panel_info.bl_max <= 0xffff)  //1Byte <= bl_max <= 2Bytes
+            {
+                led_pwm1[1] = (level & 0xf00) >> 8;
+                led_pwm1[2] = level & 0xff;
+            }
+        }
+    }
 
 	memset(&cmdreq, 0, sizeof(cmdreq));
 	cmdreq.cmds = &backlight_cmd;
@@ -207,6 +252,92 @@ disp_en_gpio_err:
 	return rc;
 }
 
+/*luochangyang for sequence 2014/06/09*/
+/*Power On by LCM spec*/
+
+void ztemt_poweron_avdd_neg(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+#if defined CONFIG_ZTEMT_MIPI_1080P_R63311_SHARP_IPS_6P4
+	/*avdd neg ctl add ,mayu 9.18 msm_dss_enable_vreg had sleep 40
+	* iovdd and avdd min interval 200ms on lcm spec*/
+	mdelay(160);
+#elif defined CONFIG_ZTEMT_MIPI_1080P_R63417_SHARP_IPS_5P5
+	/*avdd neg ctl add by lcm spec*/
+	mdelay(5);
+#else
+	mdelay(1);
+#endif
+
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+		gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
+
+	if (gpio_is_valid(ctrl_pdata->avdd_neg_en_gpio))
+	  gpio_set_value((ctrl_pdata->avdd_neg_en_gpio), 1);
+
+#if defined CONFIG_ZTEMT_MIPI_2K_R63419_SHARP_IPS_5P5
+	tps65132_set_output_avdd();
+#endif
+
+#if defined CONFIG_ZTEMT_MIPI_1080P_R63417_SHARP_IPS_5P5
+	mdelay(3);
+#else
+	mdelay(1);
+#endif
+}
+
+/*Power Off by LCM spec*/
+void ztemt_poweroff_avdd_neg(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	gpio_set_value((ctrl_pdata->rst_gpio), 0);
+	gpio_free(ctrl_pdata->rst_gpio);
+	
+#if defined CONFIG_ZTEMT_MIPI_1080P_R63311_SHARP_IPS_6P4 || \
+	defined CONFIG_ZTEMT_MIPI_1080P_R63417_SHARP_IPS_5P5
+	mdelay(10);
+#endif
+
+	if (gpio_is_valid(ctrl_pdata->avdd_neg_en_gpio)) {
+		gpio_set_value((ctrl_pdata->avdd_neg_en_gpio), 0);
+	}
+
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+			gpio_free(ctrl_pdata->disp_en_gpio);
+		}
+	
+#if defined CONFIG_ZTEMT_MIPI_1080P_R63311_SHARP_IPS_6P4
+	mdelay(50);
+#elif defined CONFIG_ZTEMT_MIPI_1080P_R63417_SHARP_IPS_5P5
+	mdelay(10);
+#else
+	mdelay(100);
+#endif
+}
+
+
+#ifdef CONFIG_ZTEMT_MIPI_1080P_R63311_SHARP_IPS_5P0_NX507J
+
+#define MIN_PWM_DUTY_NX507J 172
+
+u32 ztemt_pwm_adjust_r63311_sharp_ips_5p0_nx507j(u32 old_duty)
+{
+    //calculation formula is got by actual test
+    u32 act_duty = 0;
+    act_duty = old_duty + old_duty * 19 / 100 + 53;
+
+    if(act_duty < MIN_PWM_DUTY_NX507J)
+        act_duty = MIN_PWM_DUTY_NX507J;
+
+#ifdef CONFIG_ZTEMT_LCD_DEBUG_EN
+    printk(KERN_ERR"-----[%s] old = %d, new = %d\n", __func__, old_duty, act_duty);
+#endif
+
+    return act_duty;
+}
+#endif
+
+/*luochangyang END*/
+
 int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
@@ -222,7 +353,7 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 				panel_data);
 
 	if (!gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
-		pr_debug("%s:%d, reset line not configured\n",
+		pr_debug("%s:%d, disp_en_gpio not configured\n",
 			   __func__, __LINE__);
 	}
 
@@ -241,18 +372,32 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_err("gpio request failed\n");
 			return rc;
 		}
+		
+		pr_debug("%s: pinfo->panel_power_on = %d\n", __func__, pinfo->panel_power_on);
+
 		if (!pinfo->panel_power_on) {
+/*luochangyang for sequence 2014/06/09*/
+#ifdef CONFIG_ZTEMT_LCD_POWER_CONTRL
+			ztemt_poweron_avdd_neg(ctrl_pdata);
+#else
 			if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
+#endif
+/*luochangyang END*/
 
 			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
 				gpio_set_value((ctrl_pdata->rst_gpio),
 					pdata->panel_info.rst_seq[i]);
 				if (pdata->panel_info.rst_seq[++i])
+        		//mayu modify for accelerate
+        		#if 1
+					mdelay(pinfo->rst_seq[i]);
+				#else
 					usleep(pinfo->rst_seq[i] * 1000);
+				#endif
 			}
 		}
-
+		
 		if (gpio_is_valid(ctrl_pdata->mode_gpio)) {
 			if (pinfo->mode_gpio_state == MODE_GPIO_HIGH)
 				gpio_set_value((ctrl_pdata->mode_gpio), 1);
@@ -266,12 +411,20 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_debug("%s: Reset panel done\n", __func__);
 		}
 	} else {
+
+/*luochangyang for sequence 2014/06/09*/
+#ifdef CONFIG_ZTEMT_LCD_POWER_CONTRL
+		ztemt_poweroff_avdd_neg(ctrl_pdata);
+#else
 		if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
+
 		gpio_set_value((ctrl_pdata->rst_gpio), 0);
 		gpio_free(ctrl_pdata->rst_gpio);
+#endif
+
 		if (gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
 	}
@@ -366,6 +519,8 @@ static void mdss_dsi_panel_switch_mode(struct mdss_panel_data *pdata,
 static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 							u32 bl_level)
 {
+    char *bklt_ctrl[] = {"pwm", "wled", "dcs"};
+
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 
 	if (pdata == NULL) {
@@ -376,6 +531,10 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+    printk(KERN_INFO "[LCD]: %s: %d: bl_from_user = %3d/[0,%3d], bl_to_%s = %4d/[%d,%d]\n",__func__,__LINE__,
+                      pdata->panel_info.bl_level, pdata->panel_info.brightness_max, 
+                      (ctrl_pdata->bklt_ctrl>=0&&ctrl_pdata->bklt_ctrl<=2)? bklt_ctrl[ctrl_pdata->bklt_ctrl] : "unknow",
+                      bl_level, pdata->panel_info.bl_min, pdata->panel_info.bl_max);
 	/*
 	 * Some backlight controllers specify a minimum duty cycle
 	 * for the backlight brightness. If the brightness is less
@@ -416,6 +575,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mipi_panel_info *mipi;
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
+//	int i, data;
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -427,11 +587,33 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	mipi  = &pdata->panel_info.mipi;
 
 	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	
+	pr_info("lcd:%s start.\n",__func__);
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+	
+#ifdef CONFIG_ZTEMT_LCD_DISP_ENHANCE
+	ctrl->boot_enhance = 1;
+	zte_boot_begin_enhance(ctrl);
+#endif
 
-	pr_debug("%s:-\n", __func__);
+	if (ctrl->on_second_cmds.cmd_cnt)
+		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_second_cmds);
+
+#if 0
+
+	mdss_dsi_panel_reg_read(ctrl);
+
+	/*luochangyang for Read Registers 2014/06/16*/
+	for (i = 0; i < 0x5a0; i = i + 4) {
+		data = (u32)MIPI_INP((ctrl->ctrl_base) + i);
+	
+		printk("ctl_base(0x%x) + 0x%x = 0x%x.\n", *(ctrl->ctrl_base), i, data);
+	}
+	/*luochangyang END*/
+#endif
+	pr_info("lcd:%s done.\n",__func__);
 	return 0;
 }
 
@@ -455,7 +637,11 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
-	pr_debug("%s:-\n", __func__);
+#ifdef CONFIG_ZTEMT_LCD_DISP_ENHANCE
+/*disp color enhance,mayu add*/
+  zte_set_ctrl_point(NULL);
+#endif
+	pr_info("%s.\n", __func__);
 	return 0;
 }
 
@@ -950,6 +1136,9 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	const char *data;
 	static const char *pdest;
 	struct mdss_panel_info *pinfo = &(ctrl_pdata->panel_data.panel_info);
+#ifdef CONFIG_ZTEMT_HW_VERSION_NX505J
+    int ztemt_hw_bl_id = 0;
+#endif
 
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-panel-width", &tmp);
 	if (rc) {
@@ -1082,6 +1271,22 @@ static int mdss_panel_parse_dt(struct device_node *np,
 			ctrl_pdata->pwm_pmic_gpio = tmp;
 		} else if (!strncmp(data, "bl_ctrl_dcs", 11)) {
 			ctrl_pdata->bklt_ctrl = BL_DCS_CMD;
+            rc = of_property_read_u32(np, "qcom,mdss-dsi-bl-pmic-control-reg", &tmp);
+	        ctrl_pdata->bklt_ctrl_dcs_reg = (!rc ? tmp : 0x51);
+            printk(KERN_INFO "%s: %d: bklt_ctrl_dcs_reg = 0x%x\n",__func__,__LINE__,ctrl_pdata->bklt_ctrl_dcs_reg);
+		}else if (!strncmp(data, "bl_ctrl_unknown", 15)) {
+
+#ifdef CONFIG_ZTEMT_HW_VERSION_NX505J
+ztemt_hw_bl_id = ztemt_get_hw_id();
+        if(ztemt_hw_bl_id){ 
+            ctrl_pdata->bklt_ctrl = BL_DCS_CMD;
+        }else{
+            led_trigger_register_simple("bkl-trigger",&bl_led_trigger);
+            pr_debug("%s: SUCCESS-> WLED TRIGGER register\n",__func__);
+            ctrl_pdata->bklt_ctrl = BL_WLED;
+        }
+
+#endif            
 		}
 	}
 	rc = of_property_read_u32(np, "qcom,mdss-brightness-max-level", &tmp);
@@ -1091,6 +1296,60 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-bl-max-level", &tmp);
 	pinfo->bl_max = (!rc ? tmp : 255);
 	ctrl_pdata->bklt_max = pinfo->bl_max;
+#ifdef CONFIG_ZTEMT_HW_VERSION_NX505J
+    if(ztemt_hw_bl_id){
+        rc = of_property_read_u32(np, "qcom,mdss-brightness-max-level_B", &tmp);
+        pinfo->brightness_max = (!rc ? tmp : MDSS_MAX_BL_BRIGHTNESS);
+        rc = of_property_read_u32(np, "qcom,mdss-dsi-bl-min-level_B", &tmp);
+        pinfo->bl_min = (!rc ? tmp : 0);
+        rc = of_property_read_u32(np, "qcom,mdss-dsi-bl-max-level_B", &tmp);
+        pinfo->bl_max = (!rc ? tmp : 255);
+        ctrl_pdata->bklt_max = pinfo->bl_max;
+
+       }
+#endif
+
+    #ifdef CONFIG_ZTEMT_LCD_BACKLIGHT_LINEAR_CONTROL_METHOLD
+	rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-a1", &tmp);
+	pinfo->brig_to_bl_lvl_para_a1 = (!rc ? tmp : 0);
+
+    rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-a2", &tmp);
+	pinfo->brig_to_bl_lvl_para_a2 = (!rc ? tmp : 0);
+
+	rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-b1", &tmp);
+	pinfo->brig_to_bl_lvl_para_b1 = (!rc ? tmp : 0);
+
+	rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-b2", &tmp);
+	pinfo->brig_to_bl_lvl_para_b2 = (!rc ? tmp : 0);
+
+	rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-turn-point", &tmp);
+	pinfo->brig_to_bl_lvl_turn_point = (!rc ? tmp : 0);
+
+    #ifdef CONFIG_ZTEMT_HW_VERSION_NX505J
+    if(ztemt_hw_bl_id){
+        rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-a1_B", &tmp);
+        pinfo->brig_to_bl_lvl_para_a1 = (!rc ? tmp : 0);
+        
+        rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-a2_B", &tmp);
+        pinfo->brig_to_bl_lvl_para_a2 = (!rc ? tmp : 0);
+        
+        rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-b1_B", &tmp);
+        pinfo->brig_to_bl_lvl_para_b1 = (!rc ? tmp : 0);
+        
+        rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-para-b2_B", &tmp);
+        pinfo->brig_to_bl_lvl_para_b2 = (!rc ? tmp : 0);
+        
+        rc = of_property_read_u32(np, "qcom,mdss-dsi-bright-to-bl-lvl-turn-point_B", &tmp);
+        pinfo->brig_to_bl_lvl_turn_point = (!rc ? tmp : 0);
+       }
+    #endif
+
+    printk(KERN_INFO "%s: %d: brig_to_bl_lvl_para_a1 = %d\n",__func__,__LINE__,pinfo->brig_to_bl_lvl_para_a1);
+    printk(KERN_INFO "%s: %d: brig_to_bl_lvl_para_a2 = %d\n",__func__,__LINE__,pinfo->brig_to_bl_lvl_para_a2);
+    printk(KERN_INFO "%s: %d: brig_to_bl_lvl_para_b1 = %d\n",__func__,__LINE__,pinfo->brig_to_bl_lvl_para_b1);
+    printk(KERN_INFO "%s: %d: brig_to_bl_lvl_para_b2 = %d\n",__func__,__LINE__,pinfo->brig_to_bl_lvl_para_b2);
+    printk(KERN_INFO "%s: %d: brig_to_bl_lvl_turn_point = %d\n",__func__,__LINE__,pinfo->brig_to_bl_lvl_turn_point);
+    #endif
 
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-interleave-mode", &tmp);
 	pinfo->mipi.interleave_mode = (!rc ? tmp : 0);
@@ -1223,6 +1482,12 @@ static int mdss_panel_parse_dt(struct device_node *np,
 
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->on_cmds,
 		"qcom,mdss-dsi-on-command", "qcom,mdss-dsi-on-command-state");
+
+#ifdef CONFIG_ZTEMT_LCD_DISP_ENHANCE
+/*add init code second part,mayu add 3.5*/
+  mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->on_second_cmds,
+		"qcom,mdss-dsi-on-second_command", "qcom,mdss-dsi-on-command-state");
+#endif
 
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->off_cmds,
 		"qcom,mdss-dsi-off-command", "qcom,mdss-dsi-off-command-state");

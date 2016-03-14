@@ -27,6 +27,8 @@
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 
+#include "zte_disp_enhance.h"
+
 static int mdss_dsi_regulator_init(struct platform_device *pdev)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
@@ -765,6 +767,14 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 		}
 		ctrl_pdata->ctrl_state |= CTRL_STATE_PANEL_INIT;
 	}
+	
+#ifdef CONFIG_ZTEMT_LCD_DISP_ENHANCE
+	/*add init code second part,mayu add 3.5*/
+	pr_debug("%s:\n", __func__);
+	if (ctrl_pdata->boot_enhance == 0) {
+		zte_boot_begin_enhance(ctrl_pdata);
+	}
+#endif
 
 	if (pdata->panel_info.type == MIPI_CMD_PANEL) {
 		if (mipi->vsync_enable && mipi->hw_vsync_mode
@@ -1529,6 +1539,24 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	if (!gpio_is_valid(ctrl_pdata->rst_gpio))
 		pr_err("%s:%d, reset gpio not specified\n",
 						__func__, __LINE__);
+
+#ifdef CONFIG_ZTEMT_LCD_POWER_CONTRL
+/*avdd neg ctl board2 add ,mayu 6.25*/
+	ctrl_pdata->avdd_neg_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+						     "qcom,platform-avddn-enable-gpio", 0);
+	if (!gpio_is_valid(ctrl_pdata->avdd_neg_en_gpio)) {
+		pr_err("%s:%d, avdd_neg_en_gpio gpio not specified\n",
+						__func__, __LINE__);
+	} else {
+		rc = gpio_request(ctrl_pdata->avdd_neg_en_gpio, "lcd_avdd_neg_enable");
+		if (rc) {
+			pr_err("request reset gpio failed, rc=%d\n",
+			       rc);
+			gpio_free(ctrl_pdata->avdd_neg_en_gpio);
+			return -ENODEV;
+		}
+	}
+#endif
 
 	if (pinfo->mode_gpio_state != MODE_GPIO_NOT_VALID) {
 

@@ -1065,6 +1065,18 @@ config WCD9306_CODEC
 	  The WCD9306 codec supports either I2C/I2S or Slimbus for
 	  control and data exchnage with master processor.
 
+config AK4961_CODEC
+	tristate "AK4961 Codec"
+	select SLIMBUS
+	select MFD_CORE
+	default n
+	help
+	  Enables the AK49XX codec core driver. The core driver provides
+	  read/write capability to registers which are part of the
+	  AK4961 core and gives the ability to use the AK4961 codec.
+	  The AK4961 codec support either SPI/I2S or Slimbus for
+	  control and data exchnage with master processor.
+
 config MFD_RC5T583
 	bool "Ricoh RC5T583 Power Management system device"
 	depends on I2C=y && GENERIC_HARDIRQS

@@ -2455,6 +2455,16 @@ static int __devinit qpnp_flash_init(struct qpnp_led_data *led)
 	int rc;
 
 	led->flash_cfg->flash_on = false;
+#ifdef CONFIG_ZTE_CAMERA_FLASH_THERMAL//added by congshan for flash thermal control current
+	#define FLASH_THERMAL_DERATE(base) (base + 0x52)
+	rc = qpnp_led_masked_write(led, FLASH_THERMAL_DERATE(led->base),
+					0x80, 0x00);
+	if (rc) {
+		dev_err(&led->spmi_dev->dev,
+			"Thernal reg write failed(%d)\n", rc);
+		return rc;
+	}
+#endif
 
 	rc = qpnp_led_masked_write(led,
 		FLASH_LED_STROBE_CTRL(led->base),

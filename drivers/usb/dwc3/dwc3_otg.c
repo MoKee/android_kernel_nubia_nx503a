@@ -24,6 +24,26 @@
 #include "io.h"
 #include "xhci.h"
 
+#ifdef CONFIG_ZTEMT_CHARGE_BQ24192
+#include <../../power/bq24192_charger.h>
+#endif
+#ifdef CONFIG_ZTEMT_COMM_CHARGE
+#include <linux/qpnp/qpnp-adc.h>
+#endif
+
+#ifdef CONFIG_ZTEMT_COMM_CHARGE_X
+#define zte_dev_dbg(dev, format, ...)		     \
+dev_printk(KERN_DEBUG, dev, format, ##__VA_ARGS__)
+#undef dev_dbg
+#define dev_dbg   zte_dev_dbg
+
+//打开调试接口
+#undef KERN_DEBUG
+#define KERN_DEBUG  KERN_ERR
+#undef KERN_INFO
+#define KERN_INFO KERN_ERR
+#endif
+
 #define VBUS_REG_CHECK_DELAY	(msecs_to_jiffies(1000))
 #define MAX_INVALID_CHRGR_RETRY 3
 static int max_chgr_retry_count = MAX_INVALID_CHRGR_RETRY;
@@ -399,6 +419,15 @@ static void dwc3_ext_chg_det_done(struct usb_otg *otg, struct dwc3_charger *chg)
 	 */
 	if (test_bit(B_SESS_VLD, &dotg->inputs))
 		queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
+
+	#ifdef CONFIG_ZTEMT_CHARGE_BQ24192
+	bq24192_notify_charger(chg->chg_type);
+	#endif
+
+
+#ifdef CONFIG_ZTEMT_COMM_CHARGE
+	 qpnp_notify_charger_of_the_charger_type((int)chg->chg_type);
+#endif
 }
 
 /**
@@ -549,6 +578,9 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 	else if (dotg->charger->chg_type == DWC3_CDP_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB_CDP;
 	else if (dotg->charger->chg_type == DWC3_DCP_CHARGER ||
+		#ifdef CONFIG_ZTEMT_COMM_CHARGE
+	          dotg->charger->chg_type == DWC3_FLOATED_CHARGER ||
+   #endif
 			dotg->charger->chg_type == DWC3_PROPRIETARY_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB_DCP;
 	else
@@ -782,6 +814,12 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					work = 1;
 					break;
 				case DWC3_FLOATED_CHARGER:
+				#ifdef CONFIG_ZTEMT_COMM_CHARGE
+					dev_dbg(phy->dev, "lpm, FLOATED charger\n");
+					dwc3_otg_set_power(phy,
+							DWC3_IDEV_CHG_MAX);
+					pm_runtime_put_sync(phy->dev);		
+				#else				
 					if (dotg->charger_retry_count <
 							max_chgr_retry_count)
 						dotg->charger_retry_count++;
@@ -802,6 +840,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					}
 					charger->start_detection(dotg->charger,
 									false);
+                                   #endif
 
 				default:
 					dev_dbg(phy->dev, "chg_det started\n");

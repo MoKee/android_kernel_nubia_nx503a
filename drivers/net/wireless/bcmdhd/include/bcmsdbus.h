@@ -2,27 +2,9 @@
  * Definitions for API from sdio common code (bcmsdh) to individual
  * host controller drivers.
  *
- * Copyright (C) 1999-2012, Broadcom Corporation
- * 
- *      Unless you and Broadcom execute a separate written software license
- * agreement governing use of this software, this software is licensed to you
- * under the terms of the GNU General Public License version 2 (the "GPL"),
- * available at http://www.broadcom.com/licenses/GPLv2.php, with the
- * following added to such license:
- * 
- *      As a special exception, the copyright holders of this software give you
- * permission to link this software with independent modules, and to copy and
- * distribute the resulting executable under terms of your choice, provided that
- * you also meet, for each linked independent module, the terms and conditions of
- * the license of that module.  An independent module is a module which is not
- * derived from this software.  The special exception does not apply to any
- * modifications of the software.
- * 
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
+ * $Copyright Open Broadcom Corporation$
  *
- * $Id: bcmsdbus.h 320190 2012-03-09 19:13:53Z $
+ * $Id: bcmsdbus.h 387187 2013-02-24 09:19:34Z $
  */
 
 #ifndef	_sdio_api_h_
@@ -45,6 +27,30 @@
 
 #define SDIOH_DATA_PIO          0       /* PIO mode */
 #define SDIOH_DATA_DMA          1       /* DMA mode */
+
+#ifdef BCMSDIOH_TXGLOM
+/* Max number of glommed pkts */
+#ifdef CUSTOM_MAX_TXGLOM_SIZE
+#define SDPCM_MAXGLOM_SIZE  CUSTOM_MAX_TXGLOM_SIZE
+#else
+#define SDPCM_MAXGLOM_SIZE	10
+#endif /* CUSTOM_MAX_TXGLOM_SIZE */
+
+#define SDPCM_TXGLOM_CPY 0			/* SDIO 2.0 should use copy mode */
+#define SDPCM_TXGLOM_MDESC	1		/* SDIO 3.0 should use multi-desc mode */
+
+#ifdef BCMSDIOH_TXGLOM_HIGHSPEED
+#define SDPCM_DEFGLOM_MODE	SDPCM_TXGLOM_MDESC
+#ifdef CUSTOM_TXGLOM_SIZE
+#define SDPCM_DEFGLOM_SIZE  CUSTOM_TXGLOM_SIZE
+#else
+#define SDPCM_DEFGLOM_SIZE  10
+#endif /* CUSTOM_TXGLOM_SIZE */
+#else
+#define SDPCM_DEFGLOM_MODE	SDPCM_TXGLOM_CPY
+#define SDPCM_DEFGLOM_SIZE  3
+#endif /* BCMSDIOH_TXGLOM_HIGHSPEED */
+#endif /* BCMSDIOH_TXGLOM */
 
 
 typedef int SDIOH_API_RC;
@@ -85,6 +91,18 @@ extern SDIOH_API_RC sdioh_request_word(sdioh_info_t *si, uint cmd_type, uint rw,
 extern SDIOH_API_RC sdioh_request_buffer(sdioh_info_t *si, uint pio_dma, uint fix_inc,
 	uint rw, uint fnc_num, uint32 addr, uint regwidth, uint32 buflen, uint8 *buffer,
 	void *pkt);
+
+#ifdef BCMSDIOH_TXGLOM
+extern void	sdioh_glom_post(sdioh_info_t *sd, uint8 *frame, void *pkt, uint len);
+extern void sdioh_glom_clear(sdioh_info_t *sd);
+extern uint sdioh_set_mode(sdioh_info_t *sd, uint mode);
+extern bool sdioh_glom_enabled(void);
+#else
+#define sdioh_glom_post(a, b, c, d)
+#define sdioh_glom_clear(a)
+#define sdioh_set_mode(a) (0)
+#define sdioh_glom_enabled() (FALSE)
+#endif
 
 /* get cis data */
 extern SDIOH_API_RC sdioh_cis_read(sdioh_info_t *si, uint fuc, uint8 *cis, uint32 length);

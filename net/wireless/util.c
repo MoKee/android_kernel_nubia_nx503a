@@ -811,6 +811,7 @@ int cfg80211_change_iface(struct cfg80211_registered_device *rdev,
 	enum nl80211_iftype otype = dev->ieee80211_ptr->iftype;
 
 	ASSERT_RDEV_LOCK(rdev);
+printk("shaohua %s\n", __func__);
 
 	/* don't support changing VLANs, you just re-create them */
 	if (otype == NL80211_IFTYPE_AP_VLAN)

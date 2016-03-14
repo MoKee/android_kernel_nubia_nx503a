@@ -201,6 +201,20 @@ config SND_SOC_CS4271
 config SND_SOC_CX20442
 	tristate
 
+
+config SND_SOC_ES325
+	tristate "codec es325"
+    select SND_SOC_ES325_SLIM
+
+config SND_SOC_ES325_SLIM
+	tristate
+
+config SND_SOC_ES325_I2C
+	tristate
+
+config SND_SOC_ES325_I2S
+	tristate
+
 config SND_SOC_JZ4740_CODEC
 	tristate
 
@@ -292,8 +306,11 @@ config SND_SOC_WCD9310
 config SND_SOC_CS8427
 	tristate
 
+config SND_SOC_AK4961
+	tristate "SND_SOC_AK4961"
+
 config SND_SOC_WCD9320
-        tristate
+        tristate "SND_SOC_WCD9320"
 
 config SND_SOC_WCD9306
         tristate

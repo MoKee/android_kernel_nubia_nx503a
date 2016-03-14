@@ -16,6 +16,9 @@
 #include <linux/of_irq.h>
 #include <linux/of_fdt.h>
 #include <linux/mfd/wcd9xxx/core.h>
+#ifdef CONFIG_AK4961_CODEC
+#include <linux/mfd/ak49xx/core.h>
+#endif
 #include <asm/arch_timer.h>
 #include <asm/mach/time.h>
 #include <asm/mach/map.h>
@@ -45,8 +48,12 @@ static struct of_device_id irq_match[] __initdata  = {
 	{ .compatible = "qcom,msm-qgic2", .data = gic_of_init, },
 	{ .compatible = "qcom,msm-gpio", .data = msm_gpio_of_init, },
 	{ .compatible = "qcom,spmi-pmic-arb", .data = qpnpint_of_init, },
+#ifndef CONFIG_AK4961_CODEC
 	{ .compatible = "qcom,wcd9xxx-irq", .data = wcd9xxx_irq_of_init, },
 	{}
+#else
+	{ .compatible = "akm,ak49xx-irq", .data = ak49xx_irq_of_init, },
+#endif
 };
 
 static struct of_device_id mpm_match[] __initdata = {

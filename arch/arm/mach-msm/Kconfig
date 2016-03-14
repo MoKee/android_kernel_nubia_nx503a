@@ -1137,7 +1137,7 @@ config MACH_FSM9XXX_SURF
 	  Support for the Qualcomm FSM9xxx femtocell
 	  chipset based SURF evaluation board and
 	  FFA board.
-
+source "arch/arm/mach-msm/board/Kconfig"
 endmenu
 
 config MSM_STACKED_MEMORY
@@ -3043,6 +3043,7 @@ config KRAIT_REGULATOR
 	 line from the PMIC. This supply line is powered by multiple
 	 regulators running in ganged mode inside the PMIC. Enable
 	 this option to support such configurations.
+
 endif
 
 config KERNEL_TEXT_MPU_PROT

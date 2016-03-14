@@ -665,6 +665,28 @@ config TI_DRV2667
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_drv2667.
 
+menuconfig ZTEMT_VIBRATOR
+	bool "ZTEMT VIBRATOR"
+	default y
+
+if ZTEMT_VIBRATOR
+
+config ZTEMT_HAPTICS_DRV2605
+	tristate "HAPTICS Support for Texas Instruments DRV2605"
+	depends on I2C
+	default n
+	help
+	  This option enables support for on-chip drv2605 drivers.
+
+config ZTEMT_HAPTICS_DRV2605_DRIVE_ERM
+	bool "HAPTICS Support for DRV2605 driving ERM"
+	depends on ZTEMT_HAPTICS_DRV2605
+	default n
+	help
+	  Say 'y' here to drive ERM rather than LRA using drv2605.
+
+endif
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

@@ -3192,12 +3192,23 @@ int mmc_detect_card_removed(struct mmc_host *host)
 }
 EXPORT_SYMBOL(mmc_detect_card_removed);
 
+extern void clear_detect_flag(void);
+extern int check_detect_flag(void);
 void mmc_rescan(struct work_struct *work)
 {
 	struct mmc_host *host =
 		container_of(work, struct mmc_host, detect.work);
 	bool extend_wakelock = false;
 
+	if(host->index == 1) {
+		if(check_detect_flag()) {
+			printk("Broadcom enable detect, continue\n");
+			clear_detect_flag();
+		} else {
+			printk("Broadcom didn't enable detect, skip\n");
+			return;
+		}
+	}
 	if (host->rescan_disable)
 		return;
 

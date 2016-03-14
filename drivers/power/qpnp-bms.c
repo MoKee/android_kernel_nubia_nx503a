@@ -82,8 +82,11 @@
 #define IGNORE_SOC_TEMP_DECIDEG		50
 #define IAVG_STEP_SIZE_MA		10
 #define IAVG_INVALID			0xFF
+#ifdef CONFIG_ZTEMT_NX503A_CHARGE
+#define SOC_INVALID			0xFF
+#else
 #define SOC_INVALID			0x7E
-
+#endif
 #define IAVG_SAMPLES 16
 
 /* FCC learning constants */
@@ -94,6 +97,21 @@
 #define FCC_DEFAULT_TEMP			250
 
 #define QPNP_BMS_DEV_NAME "qcom,qpnp-bms"
+
+#ifdef CONFIG_ZTEMT_COMM_CHARGE_X
+//打开调试接口
+ #undef pr_debug
+ #define pr_debug   pr_info
+
+#undef KERN_INFO
+#define KERN_INFO KERN_ERR
+#endif
+
+#ifdef CONFIG_ZTEMT_COMM_CHARGE
+static int debug_mask_bms = 1;
+module_param_named(debug_mask_bms, debug_mask_bms, int, S_IRUGO | S_IWUSR | S_IWGRP);
+#define DBG_BMS(x...) do {if (debug_mask_bms) pr_info(">>ZTEMT_BMS>>  " x); } while (0)
+#endif
 
 enum {
 	SHDW_CC,
@@ -1169,8 +1187,11 @@ static int calculate_pc(struct qpnp_bms_chip *chip, int ocv_uv,
 
 	pc = interpolate_pc(chip->pc_temp_ocv_lut,
 			batt_temp, ocv_uv / 1000);
+#ifdef	CONFIG_ZTEMT_COMM_CHARGE
+#else
 	pr_debug("pc = %u %% for ocv = %d uv batt_temp = %d\n",
 					pc, ocv_uv, batt_temp);
+#endif
 	/* Multiply the initial FCC value by the scale factor. */
 	return pc;
 }
@@ -1438,8 +1459,11 @@ static int calculate_unusable_charge_uah(struct qpnp_bms_chip *chip,
 	uuc_iavg_ma = 0;
 	if (chip->iavg_num_samples != 0) {
 		for (i = 0; i < chip->iavg_num_samples; i++) {
+		#ifdef CONFIG_ZTEMT_COMM_CHARGE 
+		#else
 			pr_debug("iavg_samples_ma[%d] = %d\n", i,
 					chip->iavg_samples_ma[i]);
+		 #endif
 			uuc_iavg_ma += chip->iavg_samples_ma[i];
 		}
 
@@ -1756,12 +1780,22 @@ static void backup_soc_and_iavg(struct qpnp_bms_chip *chip, int batt_temp,
 	rc = qpnp_write_wrapper(chip, &temp, chip->base + IAVG_STORAGE_REG, 1);
 
 	/* store an invalid soc if temperature is below 5degC */
+#ifdef CONFIG_ZTEMT_NX503A_CHARGE
+	if (batt_temp > IGNORE_SOC_TEMP_DECIDEG)
+			temp = soc;
+	else 
+		 	temp = SOC_INVALID;
+		 	
+				rc = qpnp_write_wrapper(chip, &temp,
+																		 chip->soc_storage_addr, 1);
+#else
 	if (batt_temp > IGNORE_SOC_TEMP_DECIDEG)
 		qpnp_masked_write_base(chip, chip->soc_storage_addr,
 				SOC_STORAGE_MASK, (soc + 1) << 1);
 	else
 		qpnp_masked_write_base(chip, chip->soc_storage_addr,
 				SOC_STORAGE_MASK, SOC_STORAGE_MASK);
+#endif	
 }
 
 static int scale_soc_while_chg(struct qpnp_bms_chip *chip, int chg_time_sec,
@@ -2411,6 +2445,9 @@ static int calculate_raw_soc(struct qpnp_bms_chip *chip,
 }
 
 #define SLEEP_RECALC_INTERVAL	3
+#if defined(CONFIG_ZTEMT_COMM_CHARGE) || defined(CONFIG_ZTEMT_NX506J_CHARGE)		
+#define UPDATED_BATT_TEMP_STEP   20
+#endif
 static int calculate_state_of_charge(struct qpnp_bms_chip *chip,
 					struct raw_soc_params *raw,
 					int batt_temp)
@@ -2418,6 +2455,9 @@ static int calculate_state_of_charge(struct qpnp_bms_chip *chip,
 	struct soc_params params;
 	int soc, previous_soc, shutdown_soc, new_calculated_soc;
 	int remaining_usable_charge_uah;
+#if defined(CONFIG_ZTEMT_COMM_CHARGE) || defined(CONFIG_ZTEMT_NX506J_CHARGE)		
+	static int  previous_batt_temp  = 0;
+#endif
 
 	calculate_soc_params(chip, raw, &params, batt_temp);
 	if (!is_battery_present(chip)) {
@@ -2517,8 +2557,17 @@ done_calculating:
 	mutex_unlock(&chip->last_soc_mutex);
 	wake_up_interruptible(&chip->bms_wait_queue);
 
-	if (new_calculated_soc != previous_soc && chip->bms_psy_registered) {
+	if (
+#if defined(CONFIG_ZTEMT_COMM_CHARGE) || defined(CONFIG_ZTEMT_NX506J_CHARGE)		
+		((new_calculated_soc != previous_soc)||(abs(batt_temp - previous_batt_temp)>UPDATED_BATT_TEMP_STEP))
+#else		
+		(new_calculated_soc != previous_soc)
+#endif			
+		&& chip->bms_psy_registered) {
 		power_supply_changed(&chip->bms_psy);
+#if defined(CONFIG_ZTEMT_COMM_CHARGE) || defined(CONFIG_ZTEMT_NX506J_CHARGE)		
+		previous_batt_temp = batt_temp;
+#endif
 		pr_debug("power supply changed\n");
 	} else {
 		/*
@@ -3417,7 +3466,13 @@ static void battery_insertion_check(struct qpnp_bms_chip *chip)
 /* Returns capacity as a SoC percentage between 0 and 100 */
 static int get_prop_bms_capacity(struct qpnp_bms_chip *chip)
 {
+ #ifdef CONFIG_ZTEMT_COMM_CHARGE
+	int soc = report_state_of_charge(chip);
+	soc = bound_soc(soc);
+	return soc;
+#else
 	return report_state_of_charge(chip);
+#endif
 }
 
 static void qpnp_bms_external_power_changed(struct power_supply *psy)
@@ -3553,10 +3608,14 @@ static int read_shutdown_soc(struct qpnp_bms_chip *chip)
 		return SOC_INVALID;
 	}
 
+#ifdef CONFIG_ZTEMT_NX503A_CHARGE
+		shutdown_soc = stored_soc ;
+#else
 	if ((stored_soc >> 1) > 0)
 		shutdown_soc = (stored_soc >> 1) - 1;
 	else
 		shutdown_soc = SOC_INVALID;
+#endif
 
 	pr_debug("stored soc = 0x%02x, shutdown_soc = %d\n",
 			stored_soc, shutdown_soc);
@@ -3680,14 +3739,31 @@ static int set_battery_data(struct qpnp_bms_chip *chip)
 	if (chip->batt_type == BATT_DESAY) {
 		batt_data = &desay_5200_data;
 	} else if (chip->batt_type == BATT_PALLADIUM) {
+#ifdef CONFIG_ZTEMT_NX504J_CHARGE
+		batt_data = &ztemt_3500mAh_data;
+#elif defined(CONFIG_ZTEMT_NX503A_CHARGE) 
+  batt_data = &ztemt_NX503A_2300mAh_data;
+#else
 		batt_data = &palladium_1500_data;
+#endif
 	} else if (chip->batt_type == BATT_OEM) {
+        #if defined(CONFIG_ZTEMT_BATT_2300MAH)
+		batt_data = &ztemt_2300mAh_data;
+        #elif defined(CONFIG_ZTEMT_BATT_3000MAH)
+		batt_data = &ztemt_3000mAh_data;
+		#elif defined(CONFIG_ZTEMT_BATT_3000MAH_NX506J)
+		batt_data = &ztemt_3000mAh_data_nx506;
+		#else
 		batt_data = &oem_batt_data;
+		#endif
 	} else if (chip->batt_type == BATT_QRD_4V35_2000MAH) {
 		batt_data = &QRD_4v35_2000mAh_data;
 	} else if (chip->batt_type == BATT_QRD_4V2_1300MAH) {
 		batt_data = &qrd_4v2_1300mah_data;
 	} else {
+/*
+ CONFIG_ZTEMT_NX504J_CHARGE
+*/
 		battery_id = read_battery_id(chip);
 		if (battery_id < 0) {
 			pr_err("cannot read battery id err = %lld\n",
@@ -4443,7 +4519,10 @@ static int bms_suspend(struct device *dev)
 	struct qpnp_bms_chip *chip = dev_get_drvdata(dev);
 
 	cancel_delayed_work_sync(&chip->calculate_soc_delayed_work);
+	#ifdef CONFIG_ZTEMT_CHARGE_BQ24192
+	#else
 	chip->was_charging_at_sleep = is_battery_charging(chip);
+	#endif
 	return 0;
 }
 

@@ -1790,7 +1790,12 @@ static int mass_storage_function_init(struct android_usb_function *f,
 		snprintf(name[config->fsg.nluns], MAX_LUN_NAME, "lun0");
 		config->fsg.nluns++;
 	}
+
+#ifdef CONFIG_ZTEMT_USB
+	if (dev->pdata && dev->pdata->external_ums) {
+#else
 	if (dev->pdata && dev->pdata->internal_ums) {
+#endif
 		config->fsg.luns[config->fsg.nluns].cdrom = 0;
 		config->fsg.luns[config->fsg.nluns].ro = 0;
 		config->fsg.luns[config->fsg.nluns].removable = 1;
@@ -1809,6 +1814,11 @@ static int mass_storage_function_init(struct android_usb_function *f,
 		config->fsg.luns[n].removable = 1;
 		config->fsg.nluns++;
 	}
+
+#ifdef CONFIG_ZTEMT_USB
+	config->fsg.vendor_name = "nubia";
+	config->fsg.product_name = "Android";
+#endif
 
 	common = fsg_common_init(NULL, cdev, &config->fsg);
 	if (IS_ERR(common)) {
@@ -2564,6 +2574,9 @@ static DEVICE_ATTR(field, S_IRUGO | S_IWUSR, field ## _show, field ## _store);
 DESCRIPTOR_ATTR(idVendor, "%04x\n")
 DESCRIPTOR_ATTR(idProduct, "%04x\n")
 DESCRIPTOR_ATTR(bcdDevice, "%04x\n")
+#ifdef CONFIG_ZTEMT_USB
+DESCRIPTOR_ATTR(bcdUSB, "%04x\n")
+#endif
 DESCRIPTOR_ATTR(bDeviceClass, "%d\n")
 DESCRIPTOR_ATTR(bDeviceSubClass, "%d\n")
 DESCRIPTOR_ATTR(bDeviceProtocol, "%d\n")
@@ -2584,6 +2597,9 @@ static struct device_attribute *android_usb_attributes[] = {
 	&dev_attr_idVendor,
 	&dev_attr_idProduct,
 	&dev_attr_bcdDevice,
+#ifdef CONFIG_ZTEMT_USB
+	&dev_attr_bcdUSB,
+#endif
 	&dev_attr_bDeviceClass,
 	&dev_attr_bDeviceSubClass,
 	&dev_attr_bDeviceProtocol,
@@ -2968,8 +2984,13 @@ static int __devinit android_probe(struct platform_device *pdev)
 				&pdata->swfi_latency);
 		pdata->cdrom = of_property_read_bool(pdev->dev.of_node,
 				"qcom,android-usb-cdrom");
+#ifdef CONFIG_ZTEMT_USB
+		pdata->external_ums = of_property_read_bool(pdev->dev.of_node,
+				"qcom,android-usb-external-ums");
+#else
 		pdata->internal_ums = of_property_read_bool(pdev->dev.of_node,
 				"qcom,android-usb-internal-ums");
+#endif
 		len = of_property_count_strings(pdev->dev.of_node,
 				"qcom,streaming-func");
 		if (len > MAX_STREAMING_FUNCS) {

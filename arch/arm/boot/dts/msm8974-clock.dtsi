@@ -16,6 +16,7 @@
 	};
 
 	pm8941_clkdiv2: clkdiv@5c00 {
+			qcom,cxo-div = <1>;
 	};
 
 	pm8941_clkdiv3: clkdiv@5d00 {

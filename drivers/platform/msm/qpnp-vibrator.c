@@ -243,7 +243,7 @@ static int __devinit qpnp_vibrator_probe(struct spmi_device *spmi)
 			"qcom,vib-timeout-ms", &temp_val);
 	if (!rc) {
 		vib->timeout = temp_val;
-	} else if (rc != EINVAL) {
+	} else if (rc != -EINVAL) {
 		dev_err(&spmi->dev, "Unable to read vib timeout\n");
 		return rc;
 	}

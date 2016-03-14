@@ -229,15 +229,27 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 				      enum led_brightness value)
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
-	int bl_lvl;
+	int bl_lvl = 0;
 
-	if (value > mfd->panel_info->brightness_max)
-		value = mfd->panel_info->brightness_max;
+    mfd->panel_info->bl_level = value;
 
-	/* This maps android backlight level 0 to 255 into
-	   driver backlight level 0 to bl_max with rounding */
-	MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
-				mfd->panel_info->brightness_max);
+    if (value>0)
+    {
+    	if (value > mfd->panel_info->brightness_max)
+    		value = mfd->panel_info->brightness_max;
+
+        if (value < mfd->panel_info->brig_to_bl_lvl_turn_point)
+        {
+            bl_lvl = (mfd->panel_info->brig_to_bl_lvl_para_a1) * value + mfd->panel_info->brig_to_bl_lvl_para_b1;
+        }
+        else
+        {
+            bl_lvl = (mfd->panel_info->brig_to_bl_lvl_para_a2) * value + mfd->panel_info->brig_to_bl_lvl_para_b2;
+        }
+
+        bl_lvl = bl_lvl>0 ? bl_lvl/100 : 0;
+        bl_lvl = bl_lvl>mfd->panel_info->bl_max ? mfd->panel_info->bl_max : bl_lvl;
+    }
 
 	if (!bl_lvl && value)
 		bl_lvl = 1;
@@ -250,9 +262,12 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 	}
 }
 
+#define MDSS_DEFAULT_BL_BRIGHTNESS 61
+
 static struct led_classdev backlight_led = {
 	.name           = "lcd-backlight",
-	.brightness     = MDSS_MAX_BL_BRIGHTNESS,
+	//.brightness     = MDSS_MAX_BL_BRIGHTNESS,//set default brightness as MDSS_DEFAULT_BL_BRIGHTNESS
+	.brightness     = MDSS_DEFAULT_BL_BRIGHTNESS,
 	.brightness_set = mdss_fb_set_bl_brightness,
 };
 
@@ -307,6 +322,10 @@ static void mdss_fb_parse_dt(struct msm_fb_data_type *mfd)
 
 	panel_xres = mfd->panel_info->xres;
 	if (data[0] && data[1]) {
+		
+		pr_info("mfd->split_display=%d, panel_xres = %d\n",
+				mfd->split_display, panel_xres);
+
 		if (mfd->split_display)
 			panel_xres *= 2;
 
@@ -320,6 +339,7 @@ static void mdss_fb_parse_dt(struct msm_fb_data_type *mfd)
 		else
 			mfd->split_fb_left = mfd->split_fb_right = 0;
 	}
+
 	pr_info("split framebuffer left=%d right=%d\n",
 		mfd->split_fb_left, mfd->split_fb_right);
 }
@@ -630,8 +650,14 @@ static int mdss_fb_probe(struct platform_device *pdev)
 
 	/* android supports only one lcd-backlight/lcd for now */
 	if (!lcd_backlight_registered) {
-
+		
+/*Modify by luochangyang for backlight change in booting  2014/06/25*/
+#ifndef CONFIG_ZTEMT_LCD_MIPI_COMMON
 		backlight_led.brightness = mfd->panel_info->brightness_max;
+#else
+		backlight_led.brightness = MDSS_DEFAULT_BL_BRIGHTNESS;
+#endif
+/*luochangyang END*/
 		backlight_led.max_brightness = mfd->panel_info->brightness_max;
 		if (led_classdev_register(&pdev->dev, &backlight_led))
 			pr_err("led_classdev_register failed\n");
@@ -908,6 +934,8 @@ static void mdss_fb_scale_bl(struct msm_fb_data_type *mfd, u32 *bl_lvl)
 	}
 	pr_debug("output = %d", temp);
 
+	//pr_info("%s: temp = %d, bl_scale = %d\n", __func__, temp, mfd->bl_scale);
+
 	(*bl_lvl) = temp;
 }
 
@@ -949,6 +977,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 		 */
 		if (mfd->bl_level_scaled == temp) {
 			mfd->bl_level = bkl_lvl;
+            printk(KERN_INFO "[LCD]: %s: %d: same bl_level(%d), just return\n",__func__,__LINE__,bkl_lvl);
 		} else {
 			pr_debug("backlight sent to panel :%d\n", temp);
 			pdata->set_backlight(pdata, temp);
@@ -1001,6 +1030,9 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 	case FB_BLANK_UNBLANK:
 		if (!mfd->panel_power_on && mfd->mdp.on_fnc) {
 			ret = mfd->mdp.on_fnc(mfd);
+			
+			pr_info("%s.\n", __func__);
+			
 			if (ret == 0) {
 				mfd->panel_power_on = true;
 				mfd->panel_info->panel_dead = false;
@@ -1421,6 +1453,9 @@ static int mdss_fb_alloc_fbmem_iommu(struct msm_fb_data_type *mfd, int dom)
 	}
 
 	pr_debug("%s frame buffer reserve_size=0x%zx\n", __func__, size);
+
+	pr_info("%s frame buffer size=0x%x\n", __func__, PAGE_ALIGN(mfd->fbi->fix.line_length *
+			      mfd->fbi->var.yres_virtual));
 
 	if (size < PAGE_ALIGN(mfd->fbi->fix.line_length *
 			      mfd->fbi->var.yres_virtual))

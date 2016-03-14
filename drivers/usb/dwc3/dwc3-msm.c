@@ -74,7 +74,30 @@ module_param(ss_phy_override_deemphasis, int, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(ss_phy_override_deemphasis, "Override SSPHY demphasis value");
 
 /* Enable Proprietary charger detection */
+#if defined(CONFIG_ZTEMT_COMM_CHARGE) || defined(CONFIG_ZTEMT_CHARGE_QPNP)
+static bool prop_chg_detect = 1;
+#else
 static bool prop_chg_detect;
+#endif
+
+#ifdef CONFIG_ZTEMT_COMM_CHARGE_X
+#define zte_dev_dbg(dev, format, ...)		     \
+dev_printk(KERN_DEBUG, dev, format, ##__VA_ARGS__)
+#undef dev_dbg
+#define dev_dbg   zte_dev_dbg
+
+//打开调试接口
+#undef KERN_DEBUG
+#define KERN_DEBUG  KERN_ERR
+#undef KERN_INFO
+#define KERN_INFO KERN_ERR
+#endif
+
+#ifdef CONFIG_ZTEMT_COMM_CHARGE
+extern int qpnp_chg_is_chg_plugged_in(void);
+#endif
+
+
 module_param(prop_chg_detect, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(prop_chg_detect, "Enable Proprietary charger detection");
 
@@ -266,6 +289,9 @@ struct dwc3_msm {
 #define USB_SSPHY_1P8_HPM_LOAD		23000	/* uA */
 
 static struct usb_ext_notification *usb_ext;
+#ifdef CONFIG_ZTEMT_CHARGE_BQ24192
+extern int qpnp_is_usb_present(void);
+#endif
 
 /**
  *
@@ -1856,7 +1882,10 @@ static void dwc3_chg_detect_work(struct work_struct *w)
 			dwc3_msm_write_readback(mdwc->base,
 					CHARGING_DET_CTRL_REG, 0x1F, 0x10);
 			if (mdwc->ext_chg_opened) {
+				#if defined(CONFIG_ZTEMT_CHARGE_BQ24192) || defined(CONFIG_ZTEMT_COMM_CHARGE)
+				#else
 				init_completion(&mdwc->ext_chg_wait);
+				#endif
 				mdwc->ext_chg_active = true;
 			}
 		}
@@ -2386,12 +2415,24 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		val->intval = mdwc->current_max;
 		break;
+	#if defined(CONFIG_ZTEMT_COMM_CHARGE)
+	case POWER_SUPPLY_PROP_PRESENT:
+  	case POWER_SUPPLY_PROP_ONLINE:
+  		val->intval = qpnp_chg_is_chg_plugged_in();
+		break;
+	#elif defined(CONFIG_ZTEMT_CHARGE_BQ24192)
+	case POWER_SUPPLY_PROP_PRESENT:
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = qpnp_is_usb_present();
+		break;
+	#else		
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = mdwc->vbus_active;
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = mdwc->online;
 		break;
+	#endif	
 	case POWER_SUPPLY_PROP_TYPE:
 		val->intval = psy->type;
 		break;
@@ -2445,6 +2486,10 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		mdwc->current_max = val->intval;
+		#ifdef CONFIG_ZTEMT_COMM_CHARGE
+		if(mdwc->dev)
+			dev_dbg(mdwc->dev, "%s: current_max = %d \n", __func__, mdwc->current_max);
+		#endif
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
 		psy->type = val->intval;

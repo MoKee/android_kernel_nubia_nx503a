@@ -996,7 +996,11 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	}
 	if (!pm_runtime_enabled(dev->dev)) {
 		dev_dbg(dev->dev, "Runtime PM FEATURE is disabled\n");
+		#ifdef CONFIG_ZTEMT_CHARGE_BQ24192
+		return -EIO;
+		#else
 		i2c_qup_pm_resume(dev);
+		#endif
 	} else {
 		pm_runtime_get_sync(dev->dev);
 	}

@@ -2,27 +2,9 @@
  * Linux-specific abstractions to gain some independence from linux kernel versions.
  * Pave over some 2.2 versus 2.4 versus 2.6 kernel differences.
  *
- * Copyright (C) 1999-2012, Broadcom Corporation
- * 
- *      Unless you and Broadcom execute a separate written software license
- * agreement governing use of this software, this software is licensed to you
- * under the terms of the GNU General Public License version 2 (the "GPL"),
- * available at http://www.broadcom.com/licenses/GPLv2.php, with the
- * following added to such license:
- * 
- *      As a special exception, the copyright holders of this software give you
- * permission to link this software with independent modules, and to copy and
- * distribute the resulting executable under terms of your choice, provided that
- * you also meet, for each linked independent module, the terms and conditions of
- * the license of that module.  An independent module is a module which is not
- * derived from this software.  The special exception does not apply to any
- * modifications of the software.
- * 
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
+ * $Copyright Open Broadcom Corporation$
  *
- * $Id: linuxver.h 315203 2012-02-16 00:58:00Z $
+ * $Id: linuxver.h 389248 2013-03-06 02:00:33Z $
  */
 
 #ifndef _linuxver_h_
@@ -95,18 +77,20 @@
 #ifndef flush_scheduled_work
 #define flush_scheduled_work() flush_scheduled_tasks()
 #endif
-#endif
+#endif	
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
 #define DAEMONIZE(a) daemonize(a); \
 	allow_signal(SIGKILL); \
 	allow_signal(SIGTERM);
-#else /* Linux 2.4 (w/o preemption patch) */
+#else 
+#define RAISE_RX_SOFTIRQ() \
+	cpu_raise_softirq(smp_processor_id(), NET_RX_SOFTIRQ)
 #define DAEMONIZE(a) daemonize(); \
 	do { if (a) \
-		strncpy(current->comm, a, MIN(sizeof(current->comm), (strlen(a)
+		strncpy(current->comm, a, MIN(sizeof(current->comm), (strlen(a)))); \
 	} while (0);
-#endif /* LINUX_VERSION_CODE  */
+#endif 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 19)
 #define	MY_INIT_WORK(_work, _func)	INIT_WORK(_work, _func)
@@ -160,6 +144,7 @@ typedef irqreturn_t(*FN_ISR) (int irq, void *dev_id, struct pt_regs *ptregs);
 #include <net/ieee80211.h>
 #endif
 #endif 
+
 
 
 #ifndef __exit
@@ -481,6 +466,7 @@ pci_restore_state(struct pci_dev *dev, u32 *buffer)
 
 typedef struct {
 	void 	*parent;  
+	char 	*proc_name;
 	struct	task_struct *p_task;
 	long 	thr_pid;
 	int 	prio; 
@@ -504,18 +490,34 @@ typedef struct {
 #define SMP_RD_BARRIER_DEPENDS(x) smp_rmb(x)
 #endif
 
-
-#define PROC_START(thread_func, owner, tsk_ctl, flags) \
+#ifdef USE_KTHREAD_API
+#define PROC_START(thread_func, owner, tsk_ctl, flags, name) \
 { \
 	sema_init(&((tsk_ctl)->sema), 0); \
 	init_completion(&((tsk_ctl)->completed)); \
 	(tsk_ctl)->parent = owner; \
+	(tsk_ctl)->proc_name = name;  \
+	(tsk_ctl)->terminated = FALSE; \
+	(tsk_ctl)->p_task  = kthread_run(thread_func, tsk_ctl, (char*)name); \
+	(tsk_ctl)->thr_pid = (tsk_ctl)->p_task->pid; \
+	DBG_THR(("%s(): thread:%s:%lx started\n", __FUNCTION__, \
+		(tsk_ctl)->proc_name, (tsk_ctl)->thr_pid)); \
+}
+#else
+#define PROC_START(thread_func, owner, tsk_ctl, flags, name) \
+{ \
+	sema_init(&((tsk_ctl)->sema), 0); \
+	init_completion(&((tsk_ctl)->completed)); \
+	(tsk_ctl)->parent = owner; \
+	(tsk_ctl)->proc_name = name;  \
 	(tsk_ctl)->terminated = FALSE; \
 	(tsk_ctl)->thr_pid = kernel_thread(thread_func, tsk_ctl, flags); \
 	if ((tsk_ctl)->thr_pid > 0) \
 		wait_for_completion(&((tsk_ctl)->completed)); \
-	DBG_THR(("%s thr:%lx started\n", __FUNCTION__, (tsk_ctl)->thr_pid)); \
+	DBG_THR(("%s(): thread:%s:%lx started\n", __FUNCTION__, \
+		(tsk_ctl)->proc_name, (tsk_ctl)->thr_pid)); \
 }
+#endif 
 
 #define PROC_STOP(tsk_ctl) \
 { \
@@ -523,7 +525,8 @@ typedef struct {
 	smp_wmb(); \
 	up(&((tsk_ctl)->sema));	\
 	wait_for_completion(&((tsk_ctl)->completed)); \
-	DBG_THR(("%s thr:%lx terminated OK\n", __FUNCTION__, (tsk_ctl)->thr_pid)); \
+	DBG_THR(("%s(): thread:%s:%lx terminated OK\n", __FUNCTION__, \
+			 (tsk_ctl)->proc_name, (tsk_ctl)->thr_pid)); \
 	(tsk_ctl)->thr_pid = -1; \
 }
 

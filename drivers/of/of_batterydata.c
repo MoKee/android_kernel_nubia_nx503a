@@ -200,6 +200,9 @@ do {									\
 	}								\
 } while (0)
 
+/*
+* CONFIG_ZTEMT_NX504J_CHARGE
+*/
 static int of_batterydata_load_battery_data(struct device_node *node,
 				int best_id_kohm,
 				struct bms_battery_data *batt_data)

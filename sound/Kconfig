@@ -59,6 +59,25 @@ config SOUND_OSS_CORE_PRECLAIM
 
 source "sound/oss/dmasound/Kconfig"
 
+config ZTEMT_AUDIO_EXT_AMP
+    bool "AUDIO MACRO for ZTEMT External amp"
+    default n
+    help
+        AUDIO MACRO for ZTEMT Z7
+
+config ZTEMT_AUDIO_HEADSET_SW
+    bool "AUDIO MACRO for ZTEMT HEADSET SW"
+    default n
+    help
+        AUDIO MACRO for ZTEMT Z7
+ 
+config ZTEMT_AUDIO_MBHC_OPEN
+
+    bool "AUDIO MACRO for MBHC OPEN"
+    default n
+    help
+        AUDIO MACRO for ZTEMT Z7
+
 if !M68K && !UML
 
 menuconfig SND

@@ -44,6 +44,34 @@
    and provided to the battery driver in the units desired for
    their framework which is 0.1DegC. True resolution of 0.1DegC
    will result in the below table size to increase by 10 times */
+
+#if  defined(CONFIG_ZTEMT_CHARGE_BQ24192) ||defined( CONFIG_ZTEMT_COMM_CHARGE)
+static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
+	{-300, 1626},
+	{-250, 1573},
+	{-200, 1510},
+	{-150, 1438},
+	{-100, 1358},
+	{-50, 1274},
+	{0,   1188},
+	{50,  1103},
+	{100, 1022},
+	{150,  946},
+	{200,  877},
+	{250,  816},
+	{300,  763},
+	{350,  718},
+	{400,  679},
+	{450,  647},
+	{500,  619},
+	{550,  596},
+	{600,  577},
+	{650,  561},
+	{700,  548},
+	{750,  537},
+	{800,  528}
+};
+#else
 static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
 	{-300,	1642},
 	{-200,	1544},
@@ -129,7 +157,7 @@ static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
 	{780,	208},
 	{790,	203}
 };
-
+#endif
 static const struct qpnp_vadc_map_pt adcmap_qrd_btm_threshold[] = {
 	{-200,	1540},
 	{-180,	1517},
@@ -609,7 +637,9 @@ int32_t qpnp_adc_tdkntcg_therm(struct qpnp_vadc_chip *chip,
 	return 0;
 }
 EXPORT_SYMBOL(qpnp_adc_tdkntcg_therm);
-
+#ifdef CONFIG_ZTEMT_NX601J_CHARGE
+extern int max17050_get_ibatt_now(void);
+#endif
 int32_t qpnp_adc_scale_batt_therm(struct qpnp_vadc_chip *chip,
 		int32_t adc_code,
 		const struct qpnp_adc_properties *adc_properties,
@@ -617,9 +647,23 @@ int32_t qpnp_adc_scale_batt_therm(struct qpnp_vadc_chip *chip,
 		struct qpnp_vadc_result *adc_chan_result)
 {
 	int64_t bat_voltage = 0;
+	#ifdef CONFIG_ZTEMT_NX601J_CHARGE
+	int batt_i;
+	int compen_r;
+	#endif
 
 	bat_voltage = qpnp_adc_scale_ratiometric_calib(adc_code,
 			adc_properties, chan_properties);
+    #ifdef CONFIG_ZTEMT_NX601J_CHARGE
+	batt_i = max17050_get_ibatt_now()/1000;
+
+	if(batt_i > 0)
+		compen_r = 19;
+	else
+		compen_r = 21;
+	
+	bat_voltage = bat_voltage - compen_r * batt_i/1000;
+	#endif
 
 	return qpnp_adc_map_temp_voltage(
 			adcmap_btm_threshold,

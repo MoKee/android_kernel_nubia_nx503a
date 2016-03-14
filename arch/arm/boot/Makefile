@@ -27,6 +27,9 @@ export ZRELADDR INITRD_PHYS PARAMS_PHYS
 
 targets := Image zImage xipImage bootpImage uImage
 
+CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAMES=$(ZTEMT_DTS_NAME)
+$(warning mhx$(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAMES))
+
 DTB_NAMES := $(subst $\",,$(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAMES))
 ifneq ($(DTB_NAMES),)
 DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES))

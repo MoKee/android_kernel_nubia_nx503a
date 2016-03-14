@@ -27,6 +27,12 @@
 #include <linux/radix-tree.h>
 #include <linux/qpnp/pwm.h>
 
+#ifdef CONFIG_ZTEMT_RGB_BREATH_LEDS
+#include <linux/delay.h>
+static int ztemt_duty_pct_len;
+static int ztemt_duty_pct_start;
+static int ztemt_duty_pct_end;
+#endif
 #define QPNP_LPG_DRIVER_NAME	"qcom,qpnp-pwm"
 #define QPNP_LPG_CHANNEL_BASE	"qpnp-lpg-channel-base"
 #define QPNP_LPG_LUT_BASE	"qpnp-lpg-lut-base"
@@ -574,7 +580,13 @@ static int qpnp_lpg_change_table(struct pwm_device *pwm,
 		if (raw_value)
 			pwm_value = duty_pct[i];
 		else
+		{
+#ifdef CONFIG_ZTEMT_RGB_BREATH_LEDS
+			pwm_value = (duty_pct[i] << pwm_size) / 255;
+#else
 			pwm_value = (duty_pct[i] << pwm_size) / 100;
+#endif 
+		}
 
 		if (pwm_value > max_pwm_value)
 			pwm_value = max_pwm_value;
@@ -1026,6 +1038,10 @@ static int qpnp_lpg_configure_lut_state(struct pwm_device *pwm,
 	addr = SPMI_LPG_REG_ADDR(lpg_config->base_addr,
 				QPNP_ENABLE_CONTROL);
 
+#ifdef CONFIG_ZTEMT_RGB_BREATH_LEDS
+    //mdelay(1);//modify by ttwang for LPG bug,the Qualcomm suggest insert 1 ms delay here
+    udelay(50); 
+#endif
 	rc = qpnp_lpg_save_and_write(value2, mask2, reg2,
 					addr, 1, chip);
 	if (rc)
@@ -1185,11 +1201,25 @@ static int _pwm_lut_config(struct pwm_device *pwm, int period_us,
 	lut_config->lo_index = start_idx + 1;
 	lut_config->hi_index = start_idx + len;
 
-	rc = qpnp_lpg_change_table(pwm, duty_pct, raw_lut);
-	if (rc) {
+#ifdef CONFIG_ZTEMT_RGB_BREATH_LEDS
+    if(!((ztemt_duty_pct_len==len)&&(ztemt_duty_pct_start==duty_pct[start_idx])&&(ztemt_duty_pct_end==duty_pct[start_idx+len-1])))
+    {   
+	   rc = qpnp_lpg_change_table(pwm, duty_pct, raw_lut);
+	   if (rc) {
 		pr_err("qpnp_lpg_change_table: rc=%d\n", rc);
 		return -EINVAL;
-	}
+	   }
+    }
+    ztemt_duty_pct_len=len;
+    ztemt_duty_pct_start=duty_pct[start_idx];
+    ztemt_duty_pct_end=duty_pct[start_idx+len-1];	
+#else
+	rc = qpnp_lpg_change_table(pwm, duty_pct, raw_lut);
+	if (rc) {
+	pr_err("qpnp_lpg_change_table: rc=%d\n", rc);
+	return -EINVAL;
+    }
+#endif
 
 after_table_write:
 	ramp_step_ms = lut_params.ramp_step_ms;

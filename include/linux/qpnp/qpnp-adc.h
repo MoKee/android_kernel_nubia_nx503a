@@ -141,6 +141,10 @@ enum qpnp_iadc_channels {
 #define QPNP_ADC_HWMON_NAME_LENGTH				64
 #define QPNP_MAX_PROP_NAME_LEN					32
 
+#ifdef CONFIG_NX503A_ZTEMT_DEVICE_INFO
+struct qpnp_chg_chip;
+#endif
+
 /* Structure device for qpnp vadc */
 struct qpnp_vadc_chip;
 
@@ -1704,4 +1708,7 @@ static inline struct qpnp_adc_tm_chip *qpnp_get_adc_tm(struct device *dev,
 { return ERR_PTR(-ENXIO); }
 #endif
 
+#ifdef CONFIG_ZTEMT_COMM_CHARGE
+void qpnp_notify_charger_of_the_charger_type(int i_chg_type);
+#endif
 #endif

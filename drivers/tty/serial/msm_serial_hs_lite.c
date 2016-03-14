@@ -1840,6 +1840,10 @@ static int __devinit msm_serial_hsl_probe(struct platform_device *pdev)
 	if (msm_hsl_port->pclk)
 		clk_disable_unprepare(msm_hsl_port->pclk);
 
+#ifdef CONFIG_ZTEMT_HSL_UART_DMEN_PATCH
+    msm_hsl_write(port, 0, regmap[msm_hsl_port->ver_id][UARTDM_DMEN]);
+#endif
+
 err:
 	return ret;
 }

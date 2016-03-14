@@ -2702,6 +2702,31 @@ static int sdhci_msm_cfg_mpm_pin_wakeup(struct sdhci_host *host, unsigned mode)
 	}
 	return ret;
 }
+//shaohua add
+static void
+msm_check_status(unsigned long data)
+{
+	struct sdhci_host *host = (struct sdhci_host *)data;
+
+	mmc_detect_change(host->mmc, 0);
+}
+
+
+static void
+msm_status_notify_cb(int card_present, void *dev_id)
+{
+	struct sdhci_host *host = dev_id;
+
+	printk("shaohua, %s: card_present %d\n", mmc_hostname(host->mmc),
+	       card_present);
+	msm_check_status((unsigned long) host);
+}
+
+extern int bcm_wifi_status_register(
+                        void (*callback)(int card_present, void *dev_id),
+                        void *dev_id);
+
+//shaohua add
 
 static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 {
@@ -3033,6 +3058,10 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 			spin_unlock_irqrestore(&host->lock, flags);
 		}
 	}
+//shaohua add
+	if(host->mmc->index == 1)
+		bcm_wifi_status_register(msm_status_notify_cb, host);
+//shaohua add
 
 	ret = sdhci_add_host(host);
 	if (ret) {
@@ -3077,7 +3106,6 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 		}
 	}
 
-	device_enable_async_suspend(&pdev->dev);
 	/* Successful initialization */
 	goto out;
 

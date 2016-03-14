@@ -761,4 +761,8 @@ int mdss_mdp_pipe_program_pixel_extn(struct mdss_mdp_pipe *pipe);
 				(mfd->mdp.private1))->wb)
 
 int  mdss_mdp_ctl_reset(struct mdss_mdp_ctl *ctl);
+#ifdef CONFIG_ZTEMT_LCD_DISP_ENHANCE
+//lcd color tmp adjust,mayu add
+int zte_mdss_pcc_config(struct mdp_pcc_cfg_data *config);
+#endif
 #endif /* MDSS_MDP_H */

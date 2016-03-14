@@ -271,10 +271,15 @@ struct mdss_dsi_ctrl_pdata {
 	int irq_cnt;
 	int rst_gpio;
 	int disp_en_gpio;
+#ifdef CONFIG_ZTEMT_LCD_POWER_CONTRL
+/*avdd neg ctl board2 add ,mayu 6.25*/
+  int avdd_neg_en_gpio;
+#endif
 	int disp_te_gpio;
 	int mode_gpio;
 	int disp_te_gpio_requested;
 	int bklt_ctrl;	/* backlight ctrl */
+    u8  bklt_ctrl_dcs_reg;
 	int pwm_period;
 	int pwm_pmic_gpio;
 	int pwm_lpg_chan;
@@ -292,6 +297,13 @@ struct mdss_dsi_ctrl_pdata {
 	struct mdss_panel_recovery *recovery;
 
 	struct dsi_panel_cmds on_cmds;
+
+#ifdef CONFIG_ZTEMT_LCD_DISP_ENHANCE
+/*add init code second part,mayu add 3.5*/
+	struct dsi_panel_cmds on_second_cmds;
+	int boot_enhance;
+#endif
+
 	struct dsi_panel_cmds off_cmds;
 	struct dsi_panel_cmds status_cmds;
 	u32 status_value;

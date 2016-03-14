@@ -575,6 +575,35 @@ config LEDS_TRIGGER_SLEEP
 	help
 	  This turns LEDs on when the screen is off but the cpu still running.
 
+config ZTEMT_RGB_BREATH_LEDS
+  tristate "ZTEMT Support for rgb breath leds "
+	depends on LEDS_QPNP
+	default n
+	help
+	  This option enables support for rgb breath leds .  
+
+config ZTEMT_RGB_BREATH_LEDS_DEBUG
+  tristate "ZTEMT Support for rgb breath leds debug"
+	depends on ZTEMT_RGB_BREATH_LEDS
+	default n
+	help
+	  This option enables support for rgb breath leds debug.
+
+config ZTEMT_RGB_BREATH_LEDS_NX507J
+  tristate "ZTEMT Support for rgb breath leds "
+	depends on ZTEMT_RGB_BREATH_LEDS
+	default n
+	help
+	  This option enables support for rgb breath leds .  
+
+config ZTEMT_RGB_BREATH_LEDS_NX505J
+  tristate "ZTEMT Support for rgb breath leds "
+	depends on ZTEMT_RGB_BREATH_LEDS
+	default n
+	help
+	  This option enables support for rgb breath leds .  
+
+
 comment "iptables trigger is under Netfilter config (LED target)"
 	depends on LEDS_TRIGGERS
 

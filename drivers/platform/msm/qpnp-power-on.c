@@ -23,6 +23,10 @@
 #include <linux/input.h>
 #include <linux/log2.h>
 #include <linux/qpnp/power-on.h>
+#ifdef CONFIG_ZTE_POWEROFF_ALARM
+#include <linux/io.h>
+#include <mach/restart.h>
+#endif
 
 #define PMIC_VER_8941           0x01
 #define PMIC_VERSION_REG        0x0105
@@ -1102,6 +1106,54 @@ free_input_dev:
 	return rc;
 }
 
+#ifdef CONFIG_ZTE_POWEROFF_ALARM
+int  poweron_reason_index=0;
+int  zte_reboot_reason=0;
+
+static ssize_t poweron_reason_info_show(struct device *dev, 
+		struct device_attribute *attr, char *buf)
+{
+    if(buf)
+		
+	*buf = (char)poweron_reason_index;
+	return 1;
+}
+
+static ssize_t poweron_reason_info_store(struct device *dev, 
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+     return count;
+}
+
+static DEVICE_ATTR(info, 0444, poweron_reason_info_show, poweron_reason_info_store);
+
+static ssize_t reboot_reason_info_show(struct device *dev, 
+		struct device_attribute *attr, char *buf)
+{
+    if(buf)	
+	*buf = (char)zte_reboot_reason;
+    return 1;
+	//return snprintf(buf, PAGE_SIZE, "%d\n",zte_reboot_reason);
+}
+
+void qpnp_get_reboot_reason(void){
+
+ unsigned long reboot_reason=0;
+ 
+   reboot_reason=__raw_readl(restart_reason);
+      
+  if(0x77665503==reboot_reason)
+  	{
+	  zte_reboot_reason=3;
+    }
+   __raw_writel(0,restart_reason); 
+}
+
+static DEVICE_ATTR(rb_reason, 0444, reboot_reason_info_show, NULL);
+
+
+#endif
+
 static int __devinit qpnp_pon_probe(struct spmi_device *spmi)
 {
 	struct qpnp_pon *pon;
@@ -1113,6 +1165,10 @@ static int __devinit qpnp_pon_probe(struct spmi_device *spmi)
 	const char *s3_src;
 	u8 s3_src_reg;
 	u16 poff_sts = 0;
+#ifdef CONFIG_ZTE_POWEROFF_ALARM
+	static struct kobject *poweron_reason_kobject = NULL;
+	int ret;
+#endif
 
 	pon = devm_kzalloc(&spmi->dev, sizeof(struct qpnp_pon),
 							GFP_KERNEL);
@@ -1194,6 +1250,27 @@ static int __devinit qpnp_pon_probe(struct spmi_device *spmi)
 				pon->spmi->sid,
 				qpnp_poff_reason[index]);
 
+#ifdef CONFIG_ZTE_POWEROFF_ALARM
+
+        if(qpnp_pon_is_warm_reset())
+			index=0;		
+		poweron_reason_kobject = kobject_create_and_add("zte_poweron_reason", NULL);
+		if(poweron_reason_kobject == NULL) {
+			ret = -ENOMEM;
+			return ret;
+		}	
+		ret = sysfs_create_file(poweron_reason_kobject, &dev_attr_info.attr);
+		if(ret){
+			return ret;
+		}
+		poweron_reason_index=index;
+
+       qpnp_get_reboot_reason();
+       ret = sysfs_create_file(poweron_reason_kobject, &dev_attr_rb_reason.attr);
+		if(ret){
+			return ret;
+		}		
+#endif
 	rc = of_property_read_u32(pon->spmi->dev.of_node,
 				"qcom,pon-dbc-delay", &delay);
 	if (rc) {

@@ -469,3 +469,42 @@ int mdss_i2c_byte_write(struct i2c_client *client, uint8_t slave_addr,
 	pr_debug("%s: I2C write status=%x\n", __func__, status);
 	return status;
 }
+
+/*added by congshan 20130702 start*/
+#if defined(CONFIG_SLIMPORT_ANX7808) || defined(CONFIG_SLIMPORT_ANX7812)
+struct dss_clk slimport_clk;
+
+int slimport_core_clk(struct device *dev)
+{
+	int rc = 0;
+	if (!dev)
+		return 0;
+	pr_err("sss %s in",__func__);
+	slimport_clk.rate = 27000000;
+	snprintf(slimport_clk.clk_name, 32, "%s", "core_clk");
+	slimport_clk.clk = clk_get(dev, slimport_clk.clk_name);
+	if (slimport_clk.clk != NULL) {
+		rc = clk_set_rate(slimport_clk.clk,
+			slimport_clk.rate);
+		if (rc) {
+			DEV_ERR("%pS->%s: %s failed. rc=%d\n",
+			__builtin_return_address(0),
+			__func__,
+			slimport_clk.clk_name, rc);
+		}
+		rc = clk_prepare_enable(slimport_clk.clk);
+		if (rc)
+			DEV_ERR("%pS->%s: %s en fail. rc=%d\n",
+			__builtin_return_address(0),
+			__func__,
+			slimport_clk.clk_name, rc);
+	} else {
+			DEV_ERR("%pS->%s: '%s' is not available\n",
+				__builtin_return_address(0), __func__,
+				slimport_clk.clk_name);
+	}
+	pr_err("sss %s out",__func__);
+	return 0;
+}
+#endif
+/*added by congshan 20130702 end*/
