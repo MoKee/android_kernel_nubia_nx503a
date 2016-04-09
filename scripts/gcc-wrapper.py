@@ -41,6 +41,7 @@ import subprocess
 
 allowed_warnings = set([
     "return_address.c:62",
+    "printk.h:172",
  ])
 
 # Capture the name of the object file, can find it.
