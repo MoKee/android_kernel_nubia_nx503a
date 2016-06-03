@@ -55,8 +55,6 @@
 #include <linux/earlysuspend.h>
 #endif
 
-#define ZTEMT_TP_WAKEUP_GESTURE_FUNCTION	0		//add by luochangyang
-
 #define CY_CORE_REQUEST_EXCLUSIVE_TIMEOUT	500
 #define CY_CORE_SLEEP_REQUEST_EXCLUSIVE_TIMEOUT	5000
 #define CY_CORE_MODE_CHANGE_TIMEOUT		3000//1000
@@ -614,9 +612,9 @@ static int cyttsp4_si_get_cydata(struct cyttsp4_core_data *cd)
 		return rc;
 	}
 
-    /*** ZTEMT Added by luochangyang, 2013/04/08 ***/    
+    /*** ZTEMT Added by luochangyang, 2013/04/08 ***/
 	cydata = cd->sysinfo.si_ptrs.cydata;
-	dev_dbg(cd->dev, 
+	dev_dbg(cd->dev,
 		"%s: 0x%04X\n"
 		"%s: 0x%04X\n"
 		"%s: 0x%02X 0x%02X\n"
@@ -1095,7 +1093,7 @@ static int cyttsp4_get_fw_ver(struct cyttsp4_core_data *cd)
 	dev_dbg(cd->dev, "%s resolution %dx%d\n",__func__,si->x_res,si->y_res);
 
 	si->update_flag = cd->pdata->check_version(si);
-	dev_info(cd->dev, "%s: FW in TP:0x%04X  FW in driver:0x%04X, update_flag:%d\n", 
+	dev_info(cd->dev, "%s: FW in TP:0x%04X  FW in driver:0x%04X, update_flag:%d\n",
         __func__, si->fw_ver, si->fw_ver_new, si->update_flag);
 	return rc;
 }
@@ -1110,7 +1108,7 @@ static int cyttsp4_get_sysinfo_regs(struct cyttsp4_core_data *cd)
 	rc = cyttsp4_get_fw_ver(cd);/*read fw version*/
 	if (rc < 0)
 		return rc;
-	/* ZTEMT END */ 
+	/* ZTEMT END */
 
 	rc = cyttsp4_si_data_offsets(cd);
 	if (rc < 0)
@@ -1247,14 +1245,14 @@ static irqreturn_t cyttsp4_irq(int irq, void *handle)
 			mode[0], mode[1], mode[2]);
 
     /*Check for false bootloader interrupt Add by luochangyang 2013.04.10*/
-    if (unlikely(mode[0] == CY_CORE_BL_HOST_SYNC_BYTE) 
+    if (unlikely(mode[0] == CY_CORE_BL_HOST_SYNC_BYTE)
         && unlikely(cd->mode == CY_MODE_BOOTLOADER))
     {
 		dev_err(cd->dev, "%s: False interrupt in bootloader mode\n", __func__);
 		goto cyttsp4_irq_exit;
     }
     /*END*/
-    
+
 	if (IS_BOOTLOADER(mode[0], mode[1])) {
 		cur_mode = CY_MODE_BOOTLOADER;
 		dev_vdbg(dev, "%s: bl running\n", __func__);
@@ -1346,7 +1344,7 @@ static irqreturn_t cyttsp4_irq(int irq, void *handle)
             _cyttsp4_put_device_into_easy_wakeup(cd);
             #endif
             /***ZTEMT END***/
-            
+
 			goto cyttsp4_irq_handshake;
 		}
 	}
@@ -3481,7 +3479,7 @@ static int cyttsp4_fb_notifier_callback(struct notifier_block *self,
 		container_of(self, struct cyttsp4_core_data, fb_notif);
 	int *blank;
     int rc;
-    
+
     struct device *dev = cd->dev;
 
 	if (evdata && evdata->data && event == FB_EVENT_BLANK && cd && dev) {
@@ -3517,7 +3515,7 @@ static void cyttsp4_core_early_suspend(struct early_suspend *h)
 	}
 }
 static void cyttsp4_core_late_resume(struct early_suspend *h)
-{	
+{
 	int rc;
 	struct cyttsp4_core_data *cd = container_of(h, struct cyttsp4_core_data, es);
 	struct device *dev = cd->dev;
@@ -3793,7 +3791,6 @@ static ssize_t cyttsp4_sleep_status_show(struct device *dev,
 	return ret;
 }
 
-#if ZTEMT_TP_WAKEUP_GESTURE_FUNCTION
 static ssize_t cyttsp4_easy_wakeup_gesture_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -3837,7 +3834,6 @@ static ssize_t cyttsp4_easy_wakeup_gesture_store(struct device *dev,
 
 	return size;
 }
-#endif
 
 static struct device_attribute attributes[] = {
 	__ATTR(ic_ver, S_IRUGO, cyttsp4_ic_ver_show, NULL),
@@ -3849,11 +3845,9 @@ static struct device_attribute attributes[] = {
 		cyttsp4_drv_irq_store),
 	__ATTR(drv_debug, S_IWUSR, NULL, cyttsp4_drv_debug_store),
 	__ATTR(sleep_status, S_IRUSR, cyttsp4_sleep_status_show, NULL),
-#if ZTEMT_TP_WAKEUP_GESTURE_FUNCTION
-	__ATTR(easy_wakeup_gesture, 0660,
+	__ATTR(easy_wakeup_gesture, 0664,
 		cyttsp4_easy_wakeup_gesture_show,
 		cyttsp4_easy_wakeup_gesture_store),
-#endif
 };
 
 static int add_sysfs_interfaces(struct cyttsp4_core_data *cd,
@@ -3887,12 +3881,12 @@ static void remove_sysfs_interfaces(struct cyttsp4_core_data *cd,
 static int cyttsp4_core_parse_dt(struct device * dev,
 		struct cyttsp4_core_platform_data * pdata)
 {
-	struct device_node *np = dev->of_node; 
+	struct device_node *np = dev->of_node;
 
 	/* reset, irq gpio info */
  	pdata->rst_gpio = of_get_named_gpio(np, "cypress,reset-gpio", 0);
 	pdata->irq_gpio = of_get_named_gpio(np, "cypress,irq-gpio", 0);
-    
+
     return 0;
 }
 /*luochangyang END*/
@@ -4040,7 +4034,7 @@ static int cyttsp4_core_probe(struct cyttsp4_core *core)
 	if (IS_TTSP_VER_GE(&cd->sysinfo, 2, 2))
 		cd->easy_wakeup_gesture = pdata->easy_wakeup_gesture;
 	else
-		cd->easy_wakeup_gesture = 0xFF;
+		cd->easy_wakeup_gesture = CY_CORE_EWG_NONE;
 
 	dev_dbg(dev, "%s: add sysfs interfaces\n", __func__);
 	rc = add_sysfs_interfaces(cd, dev);
@@ -4049,16 +4043,12 @@ static int cyttsp4_core_probe(struct cyttsp4_core *core)
 		goto error_startup;
 	}
 
-#if ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG
-	cd->easy_wakeup_gesture = 1;
-#endif
-
 	device_init_wakeup(dev, 1);
 
 /* ZTEMT Added by luochangyang, 2013/07/10 */
 #if defined(CONFIG_FB)
         cd->fb_notif.notifier_call = cyttsp4_fb_notifier_callback;
-    
+
         rc = fb_register_client(&cd->fb_notif);
         if (rc) {
             dev_err(dev, "%s:Unable to register fb_notifier: %d\n", __func__, rc);
@@ -4069,7 +4059,7 @@ static int cyttsp4_core_probe(struct cyttsp4_core *core)
 	cd->es.suspend = cyttsp4_core_early_suspend;
 	cd->es.resume = cyttsp4_core_late_resume;
 	register_early_suspend(&cd->es);
-#endif 
+#endif
 /* ZTEMT END */
 
 	dev_dbg(dev, "%s: ok\n", __func__);
@@ -4114,16 +4104,16 @@ static int cyttsp4_core_release(struct cyttsp4_core *core)
 
 	remove_sysfs_interfaces(cd, dev);
 	free_irq(cd->irq, cd);
-    
+
 /* ZTEMT Added by luochangyang, 2013/07/10 */
 #if defined(CONFIG_FB)
 	if (fb_unregister_client(&cd->fb_notif))
 		dev_err(dev, "%s: Error occurred while unregistering fb_notifier.\n", __func__);
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
     unregister_early_suspend(&cd->es);
-#endif 
+#endif
     /* ZTEMT END */
-    
+
 	if (cd->pdata->init)
 		cd->pdata->init(cd->pdata, 0, dev);
 	dev_set_drvdata(dev, NULL);
