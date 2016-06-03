@@ -220,7 +220,7 @@ static int cyttsp4_xy_worker(struct cyttsp4_mt_data *md)
 	int rc = 0;
 #if ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG
 #else
-    unsigned long ids = 0;  //Added by luochangyang, 2013/09/25
+	unsigned long ids = 0;  //Added by luochangyang, 2013/09/25
 #endif
 	/*
 	 * Get event data from cyttsp4 device.
@@ -248,10 +248,10 @@ static int cyttsp4_xy_worker(struct cyttsp4_mt_data *md)
 	}
 
 	if (IS_LARGE_AREA(tt_stat)) {
-        dev_dbg(dev, "%s: Large area detected\n", __func__);
+		dev_dbg(dev, "%s: Large area detected\n", __func__);
 
-        /*** ZTEMT Added by luochangyang, 2013/09/25 ***/
-    	/* For large area event */
+		/*** ZTEMT Added by luochangyang, 2013/09/25 ***/
+		/* For large area event */
 #if ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG
 		input_report_key(md->input, KEY_POWER, 1);
 		input_sync(md->input);
@@ -259,24 +259,23 @@ static int cyttsp4_xy_worker(struct cyttsp4_mt_data *md)
 		input_report_key(md->input, KEY_POWER, 0);
 		input_sync(md->input);
 #else
-    	if (md->mt_function.input_report)
-    		md->mt_function.input_report(md->input, ABS_MT_TRACKING_ID,
-    			0, CY_OBJ_STANDARD_FINGER);
+		if (md->mt_function.input_report)
+			md->mt_function.input_report(md->input, ABS_MT_TRACKING_ID,
+				0, CY_OBJ_STANDARD_FINGER);
 
-    	input_report_abs(md->input, ABS_MT_PRESSURE, 300);
+		input_report_abs(md->input, ABS_MT_PRESSURE, 300);
 
-    	if (md->mt_function.input_sync)
-    		md->mt_function.input_sync(md->input);
-    	if (md->mt_function.final_sync)
-    		md->mt_function.final_sync(md->input, 0, 1, &ids);
-    	if (md->mt_function.report_slot_liftoff)
-    		md->mt_function.report_slot_liftoff(md, 1);
-    	if (md->mt_function.final_sync)
-    		md->mt_function.final_sync(md->input, 1, 1, &ids);
+		if (md->mt_function.input_sync)
+			md->mt_function.input_sync(md->input);
+		if (md->mt_function.final_sync)
+			md->mt_function.final_sync(md->input, 0, 1, &ids);
+		if (md->mt_function.report_slot_liftoff)
+			md->mt_function.report_slot_liftoff(md, 1);
+		if (md->mt_function.final_sync)
+			md->mt_function.final_sync(md->input, 1, 1, &ids);
 #endif
-
-        cyttsp4_lift_all(md);
-        /***ZTEMT END***/
+		cyttsp4_lift_all(md);
+		/***ZTEMT END***/
 
 		/* Do not report touch if configured so */
 		if (md->pdata->flags & CY_MT_FLAG_NO_TOUCH_ON_LO)
@@ -307,36 +306,11 @@ cyttsp4_xy_worker_exit:
 
 static void cyttsp4_mt_send_dummy_event(struct cyttsp4_mt_data *md)
 {
-#if ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG
 	input_report_key(md->input, KEY_POWER, 1);
-    input_sync(md->input);
+	input_sync(md->input);
 
-    input_report_key(md->input, KEY_POWER, 0);
-    input_sync(md->input);
-#else
-    input_report_key(md->input, KEY_F10, 1);
-    input_sync(md->input);
-
-    input_report_key(md->input, KEY_F10, 0);
-    input_sync(md->input);
-#endif
-#if 0
-	unsigned long ids = 0;
-
-	/* for easy wakeup */
-	if (md->mt_function.input_report)
-		md->mt_function.input_report(md->input, ABS_MT_TRACKING_ID,
-			0, CY_OBJ_STANDARD_FINGER);
-
-	if (md->mt_function.input_sync)
-		md->mt_function.input_sync(md->input);
-	if (md->mt_function.final_sync)
-		md->mt_function.final_sync(md->input, 0, 1, &ids);
-	if (md->mt_function.report_slot_liftoff)
-		md->mt_function.report_slot_liftoff(md, 1);
-	if (md->mt_function.final_sync)
-		md->mt_function.final_sync(md->input, 1, 1, &ids);
-#endif
+	input_report_key(md->input, KEY_POWER, 0);
+	input_sync(md->input);
 }
 
 static int cyttsp4_mt_attention(struct cyttsp4_device *ttsp)
@@ -469,7 +443,7 @@ static int cyttsp4_mt_fb_notifier_callback(struct notifier_block *self,
 		container_of(self, struct cyttsp4_mt_data, fb_notif);
 	struct device *dev = &md->ttsp->dev;
 
-    	dev_info(dev, "%s\n", __func__);
+		dev_info(dev, "%s\n", __func__);
 
 	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
 		md && md->ttsp) {
@@ -487,7 +461,7 @@ static void cyttsp4_setup_early_suspend(struct cyttsp4_mt_data *md)
 	int retval = 0;
 	struct device *dev = &md->ttsp->dev;
 
-    	dev_dbg(dev, "%s\n", __func__);
+		dev_dbg(dev, "%s\n", __func__);
 	md->fb_notif.notifier_call = cyttsp4_mt_fb_notifier_callback;
 
 	retval = fb_register_client(&md->fb_notif);
@@ -606,10 +580,10 @@ static int cyttsp4_setup_input_device(struct cyttsp4_device *ttsp)
 	__set_bit(INPUT_PROP_DIRECT, md->input->propbit);
 #endif
 
-    /*** ZTEMT Added by luochangyang, 2013/09/11 ***/
-    __set_bit(KEY_POWER, md->input->keybit);
-    __set_bit(KEY_F10, md->input->keybit);
-    /***ZTEMT END***/
+	/*** ZTEMT Added by luochangyang, 2013/09/11 ***/
+	__set_bit(KEY_POWER, md->input->keybit);
+	__set_bit(KEY_F10, md->input->keybit);
+	/***ZTEMT END***/
 
 	/* If virtualkeys enabled, don't use all screen */
 	if (md->pdata->flags & CY_MT_FLAG_VKEYS) {
