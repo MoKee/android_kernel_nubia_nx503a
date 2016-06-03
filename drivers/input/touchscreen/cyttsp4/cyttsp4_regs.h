@@ -129,8 +129,6 @@ enum cyttsp4_ic_ebid {
 #define CY_SCAN_TYPE_PROXIMITY		0x40
 #define CY_SCAN_TYPE_APA_MC		0x80
 
-#define ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG    0  //Added by luochangyang, for palm sleep  2013/12/16
-
 enum cyttsp4_hst_mode_bits {
 	CY_HST_TOGGLE      = (1 << 7),
 	CY_HST_MODE_CHANGE = (1 << 3),

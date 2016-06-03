@@ -218,10 +218,7 @@ static int cyttsp4_xy_worker(struct cyttsp4_mt_data *md)
 	u8 rep_stat;
 	u8 tt_stat;
 	int rc = 0;
-#if ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG
-#else
-    unsigned long ids = 0;  //Added by luochangyang, 2013/09/25
-#endif
+
 	/*
 	 * Get event data from cyttsp4 device.
 	 * The event data includes all data
@@ -248,35 +245,15 @@ static int cyttsp4_xy_worker(struct cyttsp4_mt_data *md)
 	}
 
 	if (IS_LARGE_AREA(tt_stat)) {
-        dev_dbg(dev, "%s: Large area detected\n", __func__);
+		dev_dbg(dev, "%s: Large area detected\n", __func__);
 
-        /*** ZTEMT Added by luochangyang, 2013/09/25 ***/
-    	/* For large area event */
-#if ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG
 		input_report_key(md->input, KEY_POWER, 1);
 		input_sync(md->input);
 
 		input_report_key(md->input, KEY_POWER, 0);
 		input_sync(md->input);
-#else
-    	if (md->mt_function.input_report)
-    		md->mt_function.input_report(md->input, ABS_MT_TRACKING_ID,
-    			0, CY_OBJ_STANDARD_FINGER);
 
-    	input_report_abs(md->input, ABS_MT_PRESSURE, 300);
-
-    	if (md->mt_function.input_sync)
-    		md->mt_function.input_sync(md->input);
-    	if (md->mt_function.final_sync)
-    		md->mt_function.final_sync(md->input, 0, 1, &ids);
-    	if (md->mt_function.report_slot_liftoff)
-    		md->mt_function.report_slot_liftoff(md, 1);
-    	if (md->mt_function.final_sync)
-    		md->mt_function.final_sync(md->input, 1, 1, &ids);
-#endif
-
-        cyttsp4_lift_all(md);
-        /***ZTEMT END***/
+		cyttsp4_lift_all(md);
 
 		/* Do not report touch if configured so */
 		if (md->pdata->flags & CY_MT_FLAG_NO_TOUCH_ON_LO)
@@ -307,36 +284,11 @@ cyttsp4_xy_worker_exit:
 
 static void cyttsp4_mt_send_dummy_event(struct cyttsp4_mt_data *md)
 {
-#if ZTEMT_CYPRESS_WAKEUP_GESTURE_DEBUG
 	input_report_key(md->input, KEY_POWER, 1);
     input_sync(md->input);
 
     input_report_key(md->input, KEY_POWER, 0);
     input_sync(md->input);
-#else
-    input_report_key(md->input, KEY_F10, 1);
-    input_sync(md->input);
-
-    input_report_key(md->input, KEY_F10, 0);
-    input_sync(md->input);
-#endif
-#if 0
-	unsigned long ids = 0;
-
-	/* for easy wakeup */
-	if (md->mt_function.input_report)
-		md->mt_function.input_report(md->input, ABS_MT_TRACKING_ID,
-			0, CY_OBJ_STANDARD_FINGER);
-
-	if (md->mt_function.input_sync)
-		md->mt_function.input_sync(md->input);
-	if (md->mt_function.final_sync)
-		md->mt_function.final_sync(md->input, 0, 1, &ids);
-	if (md->mt_function.report_slot_liftoff)
-		md->mt_function.report_slot_liftoff(md, 1);
-	if (md->mt_function.final_sync)
-		md->mt_function.final_sync(md->input, 1, 1, &ids);
-#endif
 }
 
 static int cyttsp4_mt_attention(struct cyttsp4_device *ttsp)
