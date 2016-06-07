@@ -82,8 +82,6 @@
 #define NO_SLEEP_ON (1 << 2)
 #define CONFIGURED (1 << 7)
 
-#define ZTEMT_TP_WAKEUP_GESTURE_FUNCTION	0		//add by luochangyang
-
 static int synaptics_rmi4_f12_set_enables(struct synaptics_rmi4_data *rmi4_data,
 		unsigned short ctrl28);
 
@@ -108,13 +106,11 @@ static void synaptics_rmi4_early_suspend(struct early_suspend *h);
 static void synaptics_rmi4_late_resume(struct early_suspend *h);
 #endif
 
-/*** ZTEMT Added by luochangyang, 2014/03/19 ***/
-#if ZTEMT_TP_WAKEUP_GESTURE_FUNCTION
 static ssize_t synaptics_wakeup_gesture_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t synaptics_wakeup_gesture_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
-#endif
+
 static ssize_t synaptics_rmi4_f01_reset_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 /***ZTEMT END***/
@@ -365,13 +361,9 @@ static struct device_attribute attrs[] = {
 	__ATTR(buildid, S_IRUGO,
 			synaptics_rmi4_f01_buildid_show,
 			synaptics_rmi4_store_error),
-#if ZTEMT_TP_WAKEUP_GESTURE_FUNCTION
-    /*** ZTEMT Added by luochangyang, 2014/03/19 ***/
 	__ATTR(wakeup_gesture, 00664,
 			synaptics_wakeup_gesture_show,
 			synaptics_wakeup_gesture_store),
-   	/***ZTEMT END***/
-#endif
 	__ATTR(flashprog, S_IRUGO,
 			synaptics_rmi4_f01_flashprog_show,
 			synaptics_rmi4_store_error),
@@ -469,25 +461,23 @@ static ssize_t synaptics_rmi4_f01_buildid_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%u\n",
 			rmi4_data->firmware_id);
 #else
-    /*** ZTEMT Modify by luochangyang, 2013/05/02 ***/
+	/*** ZTEMT Modify by luochangyang, 2013/05/02 ***/
 	return snprintf(buf, PAGE_SIZE, "Build ID: %u\n"
-	        "Config ID: 0x%02x 0x%02x 0x%02x 0x%02x\n", rmi4_data->firmware_id, 
+			"Config ID: 0x%02x 0x%02x 0x%02x 0x%02x\n", rmi4_data->firmware_id,
 			(rmi4_data->rmi4_mod_info.config_id[0]),
 			(rmi4_data->rmi4_mod_info.config_id[1]),
 			(rmi4_data->rmi4_mod_info.config_id[2]),
 			(rmi4_data->rmi4_mod_info.config_id[3]));
-    /***ZTEMT END***/
+	/***ZTEMT END***/
 #endif
 }
 
-/*** ZTEMT Added by luochangyang, 2014/03/19 ***/
-#if ZTEMT_TP_WAKEUP_GESTURE_FUNCTION
 static ssize_t synaptics_wakeup_gesture_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
-	
-	return snprintf(buf, PAGE_SIZE, "0x%02X\n",	rmi4_data->wakeup_gesture);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", rmi4_data->wakeup_gesture);
 }
 
 static ssize_t synaptics_wakeup_gesture_store(struct device *dev,
@@ -501,21 +491,10 @@ static ssize_t synaptics_wakeup_gesture_store(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	if (value > 0xFF && value < 0)
-		return -EINVAL;
-
-	if (value == 0xFF)
-		value = 0;
-
-	rmi4_data->wakeup_gesture = (u8)value;
-	
-	if (ret)
-		return ret;
+	rmi4_data->wakeup_gesture = (value != 0);
 
 	return size;
 }
-#endif
-/***ZTEMT END***/
 
 static ssize_t synaptics_rmi4_f01_flashprog_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -736,7 +715,7 @@ static int synaptics_rmi4_f11_abs_report(struct synaptics_rmi4_data *rmi4_data,
 					ABS_MT_TOUCH_MAJOR, max(wx, wy));
 			input_report_abs(rmi4_data->input_dev,
 					ABS_MT_TOUCH_MINOR, min(wx, wy));
-			
+
 			/*luochangyang for Palm Sleep 2014/06/12*/
 			input_report_abs(rmi4_data->input_dev,
 					ABS_MT_PRESSURE, max(wx, wy));
@@ -1142,7 +1121,7 @@ static void synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data)
 	struct synaptics_rmi4_device_info *rmi;
 
 	rmi = &(rmi4_data->rmi4_mod_info);
-	
+
 	/*
 	 * Get interrupt status information from F01 Data1 register to
 	 * determine the source(s) that are flagging the interrupt.
@@ -1158,57 +1137,57 @@ static void synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data)
 		return;
 	}
 
-    /*** ZTEMT Added by luochangyang, 2014/03/19 ***/
-    /*The function of palm to sleep*/
+	/*** ZTEMT Added by luochangyang, 2014/03/19 ***/
+	/*The function of palm to sleep*/
 #if ZTEMT_SYNAPTICS_PALM_SLEEP
-    if (!rmi4_data->sensor_sleep && rmi4_data->fw_update == 0) {	
+	if (!rmi4_data->sensor_sleep && rmi4_data->fw_update == 0) {
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
 		retval = synaptics_rmi4_reg_read(rmi4_data,
-    				0x004A,
-    				&object_type[0],
-    				sizeof(object_type[0]));
+					0x004A,
+					&object_type[0],
+					sizeof(object_type[0]));
 #elif defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3508
-        retval = synaptics_rmi4_reg_read(rmi4_data,
-    				0x0005,
-    				&interrupt_status,
-    				sizeof(interrupt_status));
-    	if (retval < 0) {
-    		dev_err(rmi4_data->pdev->dev.parent,
-    				"%s: Failed to read interrupt_status\n",
-    				__func__);
-    		return;
-    	}
-		
-        retval = synaptics_rmi4_reg_read(rmi4_data,
-    				0x0006,
-    				object_type,
-    				sizeof(object_type));
+		retval = synaptics_rmi4_reg_read(rmi4_data,
+					0x0005,
+					&interrupt_status,
+					sizeof(interrupt_status));
+		if (retval < 0) {
+			dev_err(rmi4_data->pdev->dev.parent,
+					"%s: Failed to read interrupt_status\n",
+					__func__);
+			return;
+		}
+
+		retval = synaptics_rmi4_reg_read(rmi4_data,
+					0x0006,
+					object_type,
+					sizeof(object_type));
 #endif
-    	if (retval < 0) {
-    		dev_err(rmi4_data->pdev->dev.parent,
-    				"%s: Failed to read extended_status\n",
-    				__func__);
-    		return;
-    	}
+		if (retval < 0) {
+			dev_err(rmi4_data->pdev->dev.parent,
+					"%s: Failed to read extended_status\n",
+					__func__);
+			return;
+		}
 
 		dev_dbg(rmi4_data->pdev->dev.parent,
 				"%s: 0006 object_type %d %d %d %d %d %d %d %d %d %d\n",
-				__func__, object_type[0], object_type[8], object_type[16], 
+				__func__, object_type[0], object_type[8], object_type[16],
 				object_type[24], object_type[32], object_type[40],
-				object_type[48], object_type[56], object_type[64], 
+				object_type[48], object_type[56], object_type[64],
 				object_type[72]);
 
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
 		if (object_type[0] & 0x02)
 #elif defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3508
-        if (0x03 == object_type[0] || 0x03 == object_type[8] ||
+		if (0x03 == object_type[0] || 0x03 == object_type[8] ||
 			0x03 == object_type[16] || 0x03 == object_type[24] ||
 			0x03 == object_type[32] || 0x03 == object_type[40] ||
 			0x03 == object_type[48] || 0x03 == object_type[56] ||
 			0x03 == object_type[64] || 0x03 == object_type[72])
 #endif
 		{
-			dev_dbg(rmi4_data->pdev->dev.parent, "%s: Have a palm.   %d_%d\n",	
+			dev_dbg(rmi4_data->pdev->dev.parent, "%s: Have a palm.   %d_%d\n",
 				__func__, fingers, fingers);
 #if ZTEMT_SYNAPTICS_DEBUG
 			input_report_key(rmi4_data->input_dev, KEY_POWER, 1);
@@ -1219,41 +1198,41 @@ static void synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data)
 #else
 			/* For large area event */
 			input_mt_slot(rmi4_data->input_dev, 0);
-            input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, true);
-            input_report_abs(rmi4_data->input_dev, ABS_MT_PRESSURE, 1000);
-            input_sync(rmi4_data->input_dev);
+			input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, true);
+			input_report_abs(rmi4_data->input_dev, ABS_MT_PRESSURE, 1000);
+			input_sync(rmi4_data->input_dev);
 
-            /* Release all finger */
-        	for (fingers = 0; fingers < 10; fingers++) {
-        		input_mt_slot(rmi4_data->input_dev, fingers);
-        		input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, false);
-        	}
-            input_sync(rmi4_data->input_dev);
+			/* Release all finger */
+			for (fingers = 0; fingers < 10; fingers++) {
+				input_mt_slot(rmi4_data->input_dev, fingers);
+				input_mt_report_slot_state(rmi4_data->input_dev, MT_TOOL_FINGER, false);
+			}
+			input_sync(rmi4_data->input_dev);
 #endif
-            return;
-        }
-    }
+			return;
+		}
+	}
 #endif
 
-    if (rmi4_data->sensor_sleep && rmi4_data->wakeup_gesture) {
+	if (rmi4_data->sensor_sleep && rmi4_data->wakeup_gesture) {
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
 		retval = synaptics_rmi4_reg_read(rmi4_data,
-		    		rmi4_data->f01_ctrl_base_addr + 5,
-	    			&gesture_type,
-	    			sizeof(gesture_type));
+					rmi4_data->f01_ctrl_base_addr + 5,
+					&gesture_type,
+					sizeof(gesture_type));
 		/*gesture_type is report_mode in S3208*/
 #elif defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3508
 		retval = synaptics_rmi4_reg_read(rmi4_data,
-    				0x0005,
-    				&interrupt_status,
-    				sizeof(interrupt_status));
-    	if (retval < 0) {
-    		dev_err(rmi4_data->pdev->dev.parent,
-    				"%s: Failed to read extended_status\n",
-    				__func__);
-    		return;
-    	}
-		
+					0x0005,
+					&interrupt_status,
+					sizeof(interrupt_status));
+		if (retval < 0) {
+			dev_err(rmi4_data->pdev->dev.parent,
+					"%s: Failed to read extended_status\n",
+					__func__);
+			return;
+		}
+
 		retval = synaptics_rmi4_reg_read(rmi4_data,
 					0x0007,
 					&gesture_type,
@@ -1266,34 +1245,30 @@ static void synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data)
 					__func__);
 			return;
 		}
-		
+
 		dev_dbg(rmi4_data->pdev->dev.parent,
 				"%s: 0007 gesture_type %d \n", __func__, gesture_type);
-		
+
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
 		if (0x04 == (gesture_type & 0x07))
 #elif defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3508
 		if (0x02 == gesture_type)
 #endif
 		{
-#if ZTEMT_SYNAPTICS_DEBUG
-			input_report_key(rmi4_data->input_dev, KEY_POWER, 1);
+			mutex_lock(&rmi4_data->rmi4_report_mutex);
+
+			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 1);
 			input_sync(rmi4_data->input_dev);
 
-			input_report_key(rmi4_data->input_dev, KEY_POWER, 0);
-			input_sync(rmi4_data->input_dev);
-#else
-			input_report_key(rmi4_data->input_dev, KEY_F10, 1);
+			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 0);
 			input_sync(rmi4_data->input_dev);
 
-			input_report_key(rmi4_data->input_dev, KEY_F10, 0);
-			input_sync(rmi4_data->input_dev);
-#endif
+			mutex_unlock(&rmi4_data->rmi4_report_mutex);
 
 			return;
-        }
-    }
-    /***ZTEMT END***/
+		}
+	}
+	/***ZTEMT END***/
 
 	status.data[0] = data[0];
 	if (status.unconfigured && !status.flash_prog) {
@@ -2262,21 +2237,21 @@ flash_prog_mode:
 			(unsigned int)rmi->build_id[1] * 0x100 +
 			(unsigned int)rmi->build_id[2] * 0x10000;
 
-    /*** ZTEMT Added by luochangyang, 2013/12/25 ***/
+	/*** ZTEMT Added by luochangyang, 2013/12/25 ***/
 	if (rmi4_data->firmware_id == (1544396)) {//NX504J
 		retval = synaptics_rmi4_reg_read(rmi4_data, 0x0A, rmi->config_id, sizeof(rmi->config_id));
 	} else if (rmi4_data->firmware_id == (1562749)) {//NX503A NX403A
-        retval = synaptics_rmi4_reg_read(rmi4_data, 0x56, rmi->config_id, sizeof(rmi->config_id));
-    } else {
-        retval = synaptics_rmi4_reg_read(rmi4_data, 0x59, rmi->config_id, sizeof(rmi->config_id));
-    }
+		retval = synaptics_rmi4_reg_read(rmi4_data, 0x56, rmi->config_id, sizeof(rmi->config_id));
+	} else {
+		retval = synaptics_rmi4_reg_read(rmi4_data, 0x59, rmi->config_id, sizeof(rmi->config_id));
+	}
 	if (retval < 0) {
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read firmware config id (code %d)\n",
 				__func__, retval);
 		return retval;
 	}
-    /***ZTEMT END***/
+	/***ZTEMT END***/
 
 	memset(rmi4_data->intr_mask, 0x00, sizeof(rmi4_data->intr_mask));
 
@@ -2336,7 +2311,7 @@ static void synaptics_rmi4_set_params(struct synaptics_rmi4_data *rmi4_data)
 	input_set_abs_params(rmi4_data->input_dev,
 			ABS_MT_TOUCH_MINOR, 0,
 			rmi4_data->max_touch_width, 0, 0);
-	
+
 	/*luochangyang for Palm Sleep 2014/06/12*/
 	input_set_abs_params(rmi4_data->input_dev,
 			ABS_MT_PRESSURE, 0, 255, 0, 0);
@@ -2405,10 +2380,8 @@ static int synaptics_rmi4_set_input_dev(struct synaptics_rmi4_data *rmi4_data)
 #ifdef INPUT_PROP_DIRECT
 	set_bit(INPUT_PROP_DIRECT, rmi4_data->input_dev->propbit);
 #endif
-	/*luochangyang 2014/03/19*/	
-    set_bit(KEY_POWER, rmi4_data->input_dev->keybit);
-    set_bit(KEY_F10, rmi4_data->input_dev->keybit);
-	/*luochangyang END*/
+
+	set_bit(KEY_WAKEUP, rmi4_data->input_dev->keybit);
 
 	if (rmi4_data->hw_if->board_data->swap_axes) {
 		temp = rmi4_data->sensor_max_x;
@@ -2820,42 +2793,42 @@ static int __devinit synaptics_rmi4_probe(struct platform_device *pdev)
 	}
 #else
 #ifdef CONFIG_OF
-    rmi4_data->regulator_vcc = regulator_get(pdev->dev.parent, "vcc_i2c");
-    if (IS_ERR(rmi4_data->regulator_vcc))
-    {
-        retval = PTR_ERR(rmi4_data->regulator_vcc);
-        dev_err(&pdev->dev, "Regulator get vcc_i2c failed rc=%d\n", retval);
-        goto err_regulator;
-    }
+	rmi4_data->regulator_vcc = regulator_get(pdev->dev.parent, "vcc_i2c");
+	if (IS_ERR(rmi4_data->regulator_vcc))
+	{
+		retval = PTR_ERR(rmi4_data->regulator_vcc);
+		dev_err(&pdev->dev, "Regulator get vcc_i2c failed rc=%d\n", retval);
+		goto err_regulator;
+	}
 
-    retval = regulator_enable(rmi4_data->regulator_vcc);
-    if (retval)
-    {
-        dev_err(&pdev->dev, "Regulator vcc_i2c enable failed rc=%d\n", retval);
-        goto err_regulator;
-    }
-    
-    rmi4_data->regulator = regulator_get(pdev->dev.parent, "vdd_ana");
+	retval = regulator_enable(rmi4_data->regulator_vcc);
+	if (retval)
+	{
+		dev_err(&pdev->dev, "Regulator vcc_i2c enable failed rc=%d\n", retval);
+		goto err_regulator;
+	}
+
+	rmi4_data->regulator = regulator_get(pdev->dev.parent, "vdd_ana");
 #else
-    rmi4_data->regulator = regulator_get(&pdev->dev, "pm8941_l18");
+	rmi4_data->regulator = regulator_get(&pdev->dev, "pm8941_l18");
 #endif
-    
-    if (IS_ERR(rmi4_data->regulator)) {
-        dev_err(&pdev->dev,
-                "%s: Failed to get regulator pm8941_l18\n",
-                __func__);
-        retval = PTR_ERR(rmi4_data->regulator);
-        goto err_regulator;
-    }
-    
-    retval = regulator_set_voltage(rmi4_data->regulator, 2850000, 2850000);
-    if (retval) {
-        pr_err("set_voltage rmi4_data->regulator failed, rc=%d\n", retval);
-        goto err_regulator;
-    }
 
-    regulator_enable(rmi4_data->regulator);
-    msleep(bdata->power_delay_ms);
+	if (IS_ERR(rmi4_data->regulator)) {
+		dev_err(&pdev->dev,
+				"%s: Failed to get regulator pm8941_l18\n",
+				__func__);
+		retval = PTR_ERR(rmi4_data->regulator);
+		goto err_regulator;
+	}
+
+	retval = regulator_set_voltage(rmi4_data->regulator, 2850000, 2850000);
+	if (retval) {
+		pr_err("set_voltage rmi4_data->regulator failed, rc=%d\n", retval);
+		goto err_regulator;
+	}
+
+	regulator_enable(rmi4_data->regulator);
+	msleep(bdata->power_delay_ms);
  #endif
  /***ZTEMT END***/
 
@@ -2866,13 +2839,13 @@ static int __devinit synaptics_rmi4_probe(struct platform_device *pdev)
 	rmi4_data->sensor_sleep = false;
 	rmi4_data->irq_enabled = false;
 	rmi4_data->fingers_on_2d = false;
-    /*** ZTEMT Added by luochangyang, 2013/11/19 ***/
+	/*** ZTEMT Added by luochangyang, 2013/11/19 ***/
 #if ZTEMT_SYNAPTICS_DEBUG
-    rmi4_data->wakeup_gesture = true;
+	rmi4_data->wakeup_gesture = true;
 #else
-    rmi4_data->wakeup_gesture = false;
+	rmi4_data->wakeup_gesture = false;
 #endif
-    /***ZTEMT END***/
+	/***ZTEMT END***/
 
 	rmi4_data->irq_enable = synaptics_rmi4_irq_enable;
 	rmi4_data->reset_device = synaptics_rmi4_reset_device;
@@ -2903,12 +2876,12 @@ static int __devinit synaptics_rmi4_probe(struct platform_device *pdev)
 
 /* ZTEMT Added by luochangyang, 2013/12/25 */
 #if defined(CONFIG_FB)
-    rmi4_data->fb_notif.notifier_call = synaptics_rmi4_fb_notifier_callback;
+	rmi4_data->fb_notif.notifier_call = synaptics_rmi4_fb_notifier_callback;
 
-    retval = fb_register_client(&rmi4_data->fb_notif);
-    if (retval) {
-        dev_err(&pdev->dev, "%s:Unable to register fb_notifier: %d\n", __func__, retval);
-    }
+	retval = fb_register_client(&rmi4_data->fb_notif);
+	if (retval) {
+		dev_err(&pdev->dev, "%s:Unable to register fb_notifier: %d\n", __func__, retval);
+	}
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 /*ZTEMT END*/
 	rmi4_data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
@@ -2952,9 +2925,9 @@ static int __devinit synaptics_rmi4_probe(struct platform_device *pdev)
 		}
 	}
 
-    /*** ZTEMT Added by luochangyang, 2014/03/19 ***/
+	/*** ZTEMT Added by luochangyang, 2014/03/19 ***/
 	device_init_wakeup(&pdev->dev, 1);
-    /***ZTEMT END***/
+	/***ZTEMT END***/
 
 	return retval;
 
@@ -2973,10 +2946,10 @@ err_sysfs:
 err_enable_irq:
 /*** ZTEMT Added by luochangyang, 2013/12/25 ***/
 #if defined(CONFIG_FB)
-    if (fb_unregister_client(&rmi4_data->fb_notif))
-        dev_err(&pdev->dev, "Error occurred while unregistering fb_notifier.\n");
+	if (fb_unregister_client(&rmi4_data->fb_notif))
+		dev_err(&pdev->dev, "Error occurred while unregistering fb_notifier.\n");
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
-    unregister_early_suspend(&rmi4_data->early_suspend);
+	unregister_early_suspend(&rmi4_data->early_suspend);
 #endif
 /***ZTEMT END***/
 
@@ -3045,10 +3018,10 @@ static int __devexit synaptics_rmi4_remove(struct platform_device *pdev)
 
 /*** ZTEMT Added by luochangyang, 2013/12/25 ***/
 #if defined(CONFIG_FB)
-    if (fb_unregister_client(&rmi4_data->fb_notif))
-        dev_err(&pdev->dev, "Error occurred while unregistering fb_notifier.\n");
+	if (fb_unregister_client(&rmi4_data->fb_notif))
+		dev_err(&pdev->dev, "Error occurred while unregistering fb_notifier.\n");
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
-    unregister_early_suspend(&rmi4_data->early_suspend);
+	unregister_early_suspend(&rmi4_data->early_suspend);
 #endif
 /***ZTEMT END***/
 
@@ -3096,11 +3069,11 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 {
 	int retval;
 	unsigned char device_ctrl;
-    /*** ZTEMT Added by luochangyang, 2014/03/19 ***/
-    unsigned char report_mode[3];
-	
+	/*** ZTEMT Added by luochangyang, 2014/03/19 ***/
+	unsigned char report_mode[3];
+
 	if (!(rmi4_data->sensor_sleep) && rmi4_data->wakeup_gesture) {
-		
+
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
 		retval = synaptics_rmi4_reg_read(rmi4_data,
 				rmi4_data->f01_ctrl_base_addr + 5,
@@ -3120,7 +3093,7 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 		}
 
 		dev_dbg(rmi4_data->pdev->dev.parent,
-				"%s: 0x001A report_mode %d %d %d \n", __func__, 
+				"%s: 0x001A report_mode %d %d %d \n", __func__,
 				report_mode[0], report_mode[1], report_mode[2]);
 
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
@@ -3134,7 +3107,7 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 		report_mode[0] = 0x00;
 		report_mode[1] = 0x00;
 		report_mode[2] = 0x02;
-		
+
 		retval = synaptics_rmi4_reg_write(rmi4_data,
 				0x001A,
 				report_mode,
@@ -3149,7 +3122,7 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 		} else {
 			rmi4_data->sensor_sleep = true;
 		}
-		
+
 		return;
 	}
 	/***ZTEMT END***/
@@ -3199,9 +3172,9 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 	unsigned char device_ctrl;
 	unsigned char no_sleep_setting = rmi4_data->no_sleep_setting;
 
-    /*** ZTEMT Added by luochangyang, 2013/11/19 ***/
-    unsigned char report_mode[3];
-	
+	/*** ZTEMT Added by luochangyang, 2013/11/19 ***/
+	unsigned char report_mode[3];
+
 	if (rmi4_data->sensor_sleep && rmi4_data->wakeup_gesture) {
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
 		retval = synaptics_rmi4_reg_read(rmi4_data,
@@ -3223,9 +3196,9 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 		}
 
 		dev_dbg(rmi4_data->pdev->dev.parent,
-				"%s: 0x001A report_mode %d %d %d \n", __func__, 
+				"%s: 0x001A report_mode %d %d %d \n", __func__,
 				report_mode[0], report_mode[1], report_mode[2]);
-		
+
 #if defined CONFIG_ZTEMT_TOUCHSCREEN_SYNAPTICS_S3208
 		report_mode[0] &= 0xF8;
 
@@ -3237,7 +3210,7 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 		report_mode[0] = 0x00;
 		report_mode[1] = 0x00;
 		report_mode[2] = 0x00;
-		
+
 		retval = synaptics_rmi4_reg_write(rmi4_data,
 				0x001A,
 				report_mode,
@@ -3252,7 +3225,7 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 		} else {
 			rmi4_data->sensor_sleep = false;
 		}
-		
+
 		return;
 	}
 	/***ZTEMT END***/
@@ -3293,21 +3266,21 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 static int synaptics_rmi4_ztemt_sleep(struct synaptics_rmi4_data *rmi4_data)
 {
 	struct synaptics_rmi4_exp_fhandler *exp_fhandler;
-    
+
 	if (rmi4_data->stay_awake) {
 		rmi4_data->staying_awake = true;
 		return 0;
 	} else {
 		rmi4_data->staying_awake = false;
 	}
-	
-    /*** ZTEMT luochangyang, 2014/03/19 ***/
-    if (!(rmi4_data->wakeup_gesture)) {
+
+	/*** ZTEMT luochangyang, 2014/03/19 ***/
+	if (!(rmi4_data->wakeup_gesture)) {
 		rmi4_data->touch_stopped = true;
 		synaptics_rmi4_irq_enable(rmi4_data, false);
 	}
-    /***ZTEMT END***/
-	
+	/***ZTEMT END***/
+
 	synaptics_rmi4_sensor_sleep(rmi4_data);
 	synaptics_rmi4_free_fingers(rmi4_data);
 
@@ -3322,7 +3295,7 @@ static int synaptics_rmi4_ztemt_sleep(struct synaptics_rmi4_data *rmi4_data)
 	if (rmi4_data->full_pm_cycle)
 		synaptics_rmi4_suspend(&(rmi4_data->input_dev->dev));
 
-    return 0;
+	return 0;
 }
 
 
@@ -3330,7 +3303,7 @@ static int synaptics_rmi4_ztemt_wake(struct synaptics_rmi4_data *rmi4_data)
 {
 	int retval;
 	struct synaptics_rmi4_exp_fhandler *exp_fhandler;
-    
+
 	if (rmi4_data->staying_awake)
 		return 0;
 
@@ -3339,11 +3312,11 @@ static int synaptics_rmi4_ztemt_wake(struct synaptics_rmi4_data *rmi4_data)
 
 	if (rmi4_data->sensor_sleep == true) {
 		synaptics_rmi4_sensor_wake(rmi4_data);
-	    /*** ZTEMT Added by luochangyang, 2014/03/19 ***/
-	    if (!(rmi4_data->wakeup_gesture)) {
+		/*** ZTEMT Added by luochangyang, 2014/03/19 ***/
+		if (!(rmi4_data->wakeup_gesture)) {
 			synaptics_rmi4_irq_enable(rmi4_data, true);
-	    }
-	    /***ZTEMT END***/
+		}
+		/***ZTEMT END***/
 		retval = synaptics_rmi4_reinit_device(rmi4_data);
 		if (retval < 0) {
 			dev_err(rmi4_data->pdev->dev.parent,
@@ -3362,19 +3335,19 @@ static int synaptics_rmi4_ztemt_wake(struct synaptics_rmi4_data *rmi4_data)
 
 	rmi4_data->touch_stopped = false;
 /*modify by LiXin for updating FW*/
-    if(rmi4_data->fw_update) 
-        return 0; 
-    
-    retval = synaptics_rmi4_reset_device(rmi4_data);
-    if (retval < 0) {
-         dev_err(rmi4_data->pdev->dev.parent,
-         "%s: Failed to issue reset command, error = %d\n",
-         __func__, retval);
-    }
-    dev_dbg(rmi4_data->pdev->dev.parent,
-            "%s: synaptics_rmi4_reset_device  \n", __func__);
+	if (rmi4_data->fw_update)
+		return 0;
+
+	retval = synaptics_rmi4_reset_device(rmi4_data);
+	if (retval < 0) {
+		dev_err(rmi4_data->pdev->dev.parent,
+			"%s: Failed to issue reset command, error = %d\n",
+			__func__, retval);
+	}
+	dev_dbg(rmi4_data->pdev->dev.parent,
+		"%s: synaptics_rmi4_reset_device  \n", __func__);
 /*ZTEMT END*/
-    return 0;
+	return 0;
 }
 /***ZTEMT END***/
 #endif
@@ -3388,17 +3361,17 @@ static int synaptics_rmi4_fb_notifier_callback(struct notifier_block *self,
 	struct synaptics_rmi4_data *rmi4_data =
 		container_of(self, struct synaptics_rmi4_data, fb_notif);
 
-	if (evdata && evdata->data && rmi4_data && 
-        rmi4_data->input_dev && (event == FB_EVENT_BLANK)) {
+	if (evdata && evdata->data && rmi4_data &&
+		rmi4_data->input_dev && (event == FB_EVENT_BLANK)) {
 
 		blank = evdata->data;
 		if (*blank == FB_BLANK_UNBLANK) {
-            synaptics_rmi4_ztemt_wake(rmi4_data);
-            dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Wake!\n", __func__);
+			synaptics_rmi4_ztemt_wake(rmi4_data);
+			dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Wake!\n", __func__);
 		}
 		else if (*blank == FB_BLANK_POWERDOWN) {
-            synaptics_rmi4_ztemt_sleep(rmi4_data);
-            dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Sleep!\n", __func__);
+			synaptics_rmi4_ztemt_sleep(rmi4_data);
+			dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Sleep!\n", __func__);
 		}
 	}
 
@@ -3420,8 +3393,8 @@ static void synaptics_rmi4_early_suspend(struct early_suspend *h)
 			container_of(h, struct synaptics_rmi4_data,
 			early_suspend);
 
-    synaptics_rmi4_ztemt_sleep(rmi4_data);
-    dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Sleep!\n", __func__);
+	synaptics_rmi4_ztemt_sleep(rmi4_data);
+	dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Sleep!\n", __func__);
 
 	return;
 }
@@ -3441,8 +3414,8 @@ static void synaptics_rmi4_late_resume(struct early_suspend *h)
 			container_of(h, struct synaptics_rmi4_data,
 			early_suspend);
 
-    synaptics_rmi4_ztemt_wake(rmi4_data);
-    dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Wake!\n", __func__);
+	synaptics_rmi4_ztemt_wake(rmi4_data);
+	dev_info(&(rmi4_data->input_dev->dev), "ztemt %s: Wake!\n", __func__);
 
 	return;
 }
@@ -3507,7 +3480,7 @@ static int synaptics_rmi4_resume(struct device *dev)
 
 	if (rmi4_data->staying_awake)
 		return 0;
-	
+
 	if ((!rmi4_data->wakeup_gesture) && rmi4_data->regulator) {	//luochangyang 2014/03/19
 		regulator_enable(rmi4_data->regulator);
 		msleep(bdata->reset_delay_ms);
@@ -3542,16 +3515,16 @@ static int synaptics_rmi4_resume(struct device *dev)
  static int synaptics_wakeup_gesture_suspend(struct device *dev)
  {
 	 struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
- 
+
 	 if (!(rmi4_data->wakeup_gesture))
 		 return 0;
- 
+
 	 /*
 	  * This will not prevent resume
 	  * Required to prevent interrupts before i2c awake
 	  */
 	 disable_irq(rmi4_data->irq);
- 
+
 	 if (device_may_wakeup(dev)) {
 		 dev_dbg(dev, "%s Device MAY wakeup\n", __func__);
 		 if (!enable_irq_wake(rmi4_data->irq))
@@ -3559,19 +3532,19 @@ static int synaptics_rmi4_resume(struct device *dev)
 	 } else {
 		 dev_dbg(dev, "%s Device may NOT wakeup\n", __func__);
 	 }
- 
+
 	 return 0;
  }
- 
+
  static int synaptics_wakeup_gesture_resume(struct device *dev)
  {
 	 struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
- 
+
 	 if (!(rmi4_data->wakeup_gesture))
 		 return 0;
-	 
+
 	 enable_irq(rmi4_data->irq);
- 
+
 	 if (device_may_wakeup(dev)) {
 		 dev_dbg(dev, "%s Device MAY wakeup\n", __func__);
 		 if (rmi4_data->irq_wake) {
@@ -3581,7 +3554,7 @@ static int synaptics_rmi4_resume(struct device *dev)
 	 } else {
 		 dev_dbg(dev, "%s Device may NOT wakeup\n", __func__);
 	 }
- 
+
 	 return 0;
  }
 #endif
