@@ -3798,8 +3798,8 @@ static ssize_t cyttsp4_easy_wakeup_gesture_show(struct device *dev,
 	ssize_t ret;
 
 	mutex_lock(&cd->system_lock);
-	ret = snprintf(buf, CY_MAX_PRBUF_SIZE, "0x%02X\n",
-			cd->easy_wakeup_gesture);
+	ret = snprintf(buf, CY_MAX_PRBUF_SIZE, "%d\n",
+			(cd->easy_wakeup_gesture != CY_CORE_EWG_NONE));
 	mutex_unlock(&cd->system_lock);
 	return ret;
 }
@@ -3815,14 +3815,11 @@ static ssize_t cyttsp4_easy_wakeup_gesture_store(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	if (value > 0xFF && value < 0)
-		return -EINVAL;
-
 	pm_runtime_get_sync(dev);
 
 	mutex_lock(&cd->system_lock);
 	if (cd->sysinfo.ready && IS_TTSP_VER_GE(&cd->sysinfo, 2, 2))
-		cd->easy_wakeup_gesture = (u8)value;
+		cd->easy_wakeup_gesture = (value != 0 ? CY_CORE_EWG_TAP_TAP : CY_CORE_EWG_NONE);
 	else
 		ret = -ENODEV;
 	mutex_unlock(&cd->system_lock);
