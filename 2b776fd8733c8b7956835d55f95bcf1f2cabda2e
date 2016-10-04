@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5fd57731_6d975592",
+        "filename": "arch/arm/configs/mokee_nx503a_defconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 2473,
+      "author": {
+        "id": 1318
+      },
+      "writtenOn": "2016-10-04T11:25:54Z",
+      "side": 1,
+      "message": "it is best to build it into kernel not as module",
+      "range": {
+        "startLine": 2472,
+        "startChar": 9,
+        "endLine": 2473,
+        "endChar": 29
+      },
+      "revId": "2b776fd8733c8b7956835d55f95bcf1f2cabda2e",
+      "serverId": "83d63960-fecf-4fd1-a7f6-e01518638a62",
+      "unresolved": false
+    }
+  ]
+}
